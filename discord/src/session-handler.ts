@@ -494,13 +494,13 @@ export async function handleOpencodeSession({
   const directory = projectDirectory || process.cwd()
   sessionLogger.log(`Using directory: ${directory}`)
 
-  // Fire all independent lookups in parallel. initializeOpencodeForDirectory is the
-  // slowest (spawns server on cold start), so starting it immediately alongside
-  // the DB lookups saves the most time.
-  const [worktreeInfo, existingSessionId, initResult] = await Promise.all([
+  // Fire DB lookups in parallel - they're independent and we need both before proceeding.
+  // initializeOpencodeForDirectory is NOT included here because it needs worktree info
+  // to set originalRepoDirectory permissions on the spawned server (reuse check means
+  // a second call with different options won't fix a server already spawned without them).
+  const [worktreeInfo, existingSessionId] = await Promise.all([
     getThreadWorktree(thread.id),
     getThreadSession(thread.id),
-    initializeOpencodeForDirectory(directory),
   ])
 
   const worktreeDirectory =
@@ -512,11 +512,8 @@ export async function handleOpencodeSession({
     sessionLogger.log(`Using worktree directory for SDK calls: ${worktreeDirectory}`)
   }
 
-  // Re-initialize with worktree info if needed (passes originalRepoDirectory)
   const originalRepoDirectory = worktreeDirectory ? worktreeInfo?.project_directory : undefined
-  const getClient = originalRepoDirectory
-    ? await initializeOpencodeForDirectory(directory, { originalRepoDirectory })
-    : initResult
+  const getClient = await initializeOpencodeForDirectory(directory, { originalRepoDirectory })
   if (getClient instanceof Error) {
     await sendThreadMessage(thread, `✗ ${getClient.message}`)
     return
@@ -633,9 +630,8 @@ export async function handleOpencodeSession({
 
   // Snapshot model+agent early so user changes (e.g. /agent) during the async gap
   // (debounce, previous handler wait, event subscribe) don't affect this request.
-  // Parallelize: agent preference, channel directory lookup, and variant cascade
-  // are all independent. Fetch them together, then resolve model (needs agent + channelInfo).
-  const [earlyAgentResult, channelInfo, preferredVariant] = await Promise.all([
+  // Parallelize: agent preference and channel directory lookup are independent.
+  const [earlyAgentResult, channelInfo] = await Promise.all([
     errore.tryAsync(() => {
       return resolveValidatedAgentPreference({
         agent,
@@ -645,11 +641,6 @@ export async function handleOpencodeSession({
       })
     }),
     channelId ? getChannelDirectory(channelId) : Promise.resolve(undefined),
-    getVariantCascade({
-      sessionId: session.id,
-      channelId,
-      appId,
-    }),
   ])
   if (earlyAgentResult instanceof Error) {
     await sendThreadMessage(thread, `Failed to resolve agent: ${earlyAgentResult.message}`)
@@ -662,29 +653,39 @@ export async function handleOpencodeSession({
 
   const resolvedAppId = channelInfo?.appId ?? appId
 
-  const earlyModelResult = await errore.tryAsync(async () => {
-    if (model) {
-      const [providerID, ...modelParts] = model.split('/')
-      const modelID = modelParts.join('/')
-      if (providerID && modelID) {
-        sessionLogger.log(`[MODEL] Using explicit model (early): ${model}`)
-        return { providerID, modelID }
+  // Model resolution and variant cascade are independent - run in parallel.
+  // Variant cascade only needs resolvedAppId (available now). Variant validation
+  // against the model happens after both complete.
+  const [earlyModelResult, preferredVariant] = await Promise.all([
+    errore.tryAsync(async () => {
+      if (model) {
+        const [providerID, ...modelParts] = model.split('/')
+        const modelID = modelParts.join('/')
+        if (providerID && modelID) {
+          sessionLogger.log(`[MODEL] Using explicit model (early): ${model}`)
+          return { providerID, modelID }
+        }
       }
-    }
-    const modelInfo = await getCurrentModelInfo({
+      const modelInfo = await getCurrentModelInfo({
+        sessionId: session.id,
+        channelId,
+        appId: resolvedAppId,
+        agentPreference: earlyAgentPreference,
+        getClient,
+      })
+      if (modelInfo.type === 'none') {
+        sessionLogger.log(`[MODEL] No model available (early resolution)`)
+        return undefined
+      }
+      sessionLogger.log(`[MODEL] Resolved ${modelInfo.type} early: ${modelInfo.model}`)
+      return { providerID: modelInfo.providerID, modelID: modelInfo.modelID }
+    }),
+    getVariantCascade({
       sessionId: session.id,
       channelId,
       appId: resolvedAppId,
-      agentPreference: earlyAgentPreference,
-      getClient,
-    })
-    if (modelInfo.type === 'none') {
-      sessionLogger.log(`[MODEL] No model available (early resolution)`)
-      return undefined
-    }
-    sessionLogger.log(`[MODEL] Resolved ${modelInfo.type} early: ${modelInfo.model}`)
-    return { providerID: modelInfo.providerID, modelID: modelInfo.modelID }
-  })
+    }),
+  ])
   if (earlyModelResult instanceof Error) {
     await sendThreadMessage(thread, `Failed to resolve model: ${earlyModelResult.message}`)
     return

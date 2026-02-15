@@ -20,10 +20,12 @@ import {
   getThreadSession,
   getGlobalModel,
   setGlobalModel,
+  getVariantCascade,
 } from '../database.js'
 import { initializeOpencodeForDirectory } from '../opencode.js'
 import { resolveTextChannel, getKimakiMetadata } from '../discord-utils.js'
 import { abortAndRetrySession, getDefaultModel } from '../session-handler.js'
+import { getThinkingValuesForModel } from '../thinking-utils.js'
 import { createLogger, LogPrefix } from '../logger.js'
 import * as errore from 'errore'
 
@@ -42,6 +44,8 @@ const pendingModelContexts = new Map<
     thread?: ThreadChannel
     appId?: string
     selectedModelId?: string
+    selectedVariant?: string | null
+    availableVariants?: string[]
   }
 >()
 
@@ -109,11 +113,11 @@ export async function getCurrentModelInfo({
 
   // 1. Check session model preference
   if (sessionId) {
-    const sessionModel = await getSessionModel(sessionId)
-    if (sessionModel) {
-      const parsed = parseModelId(sessionModel)
+    const sessionPref = await getSessionModel(sessionId)
+    if (sessionPref) {
+      const parsed = parseModelId(sessionPref.modelId)
       if (parsed) {
-        return { type: 'session', model: sessionModel, ...parsed }
+        return { type: 'session', model: sessionPref.modelId, ...parsed }
       }
     }
   }
@@ -141,22 +145,22 @@ export async function getCurrentModelInfo({
 
   // 3. Check channel model preference
   if (channelId) {
-    const channelModel = await getChannelModel(channelId)
-    if (channelModel) {
-      const parsed = parseModelId(channelModel)
+    const channelPref = await getChannelModel(channelId)
+    if (channelPref) {
+      const parsed = parseModelId(channelPref.modelId)
       if (parsed) {
-        return { type: 'channel', model: channelModel, ...parsed }
+        return { type: 'channel', model: channelPref.modelId, ...parsed }
       }
     }
   }
 
   // 4. Check global model preference
   if (appId) {
-    const globalModel = await getGlobalModel(appId)
-    if (globalModel) {
-      const parsed = parseModelId(globalModel)
+    const globalPref = await getGlobalModel(appId)
+    if (globalPref) {
+      const parsed = parseModelId(globalPref.modelId)
       if (parsed) {
-        return { type: 'global', model: globalModel, ...parsed }
+        return { type: 'global', model: globalPref.modelId, ...parsed }
       }
     }
   }
@@ -216,14 +220,16 @@ export async function handleModelCommand({
 
   if (isThread) {
     const thread = channel as ThreadChannel
-    const textChannel = await resolveTextChannel(thread)
+    // Parallelize: resolve metadata and session ID at the same time
+    const [textChannel, threadSessionId] = await Promise.all([
+      resolveTextChannel(thread),
+      getThreadSession(thread.id),
+    ])
     const metadata = await getKimakiMetadata(textChannel)
     projectDirectory = metadata.projectDirectory
     channelAppId = metadata.channelAppId
     targetChannelId = textChannel?.id || channel.id
-
-    // Get session ID for this thread
-    sessionId = await getThreadSession(thread.id)
+    sessionId = threadSessionId
   } else if (channel.type === ChannelType.GuildText) {
     const textChannel = channel as TextChannel
     const metadata = await getKimakiMetadata(textChannel)
@@ -258,9 +264,24 @@ export async function handleModelCommand({
       return
     }
 
-    const providersResponse = await getClient().provider.list({
-      query: { directory: projectDirectory },
-    })
+    const effectiveAppId = channelAppId || appId
+
+    // Parallelize: fetch providers, current model info, and variant cascade at the same time.
+    // getCurrentModelInfo does DB lookups first (fast) and only hits provider.list as fallback.
+    const [providersResponse, currentModelInfo, cascadeVariant] = await Promise.all([
+      getClient().provider.list({ query: { directory: projectDirectory } }),
+      getCurrentModelInfo({
+        sessionId,
+        channelId: targetChannelId,
+        appId: effectiveAppId,
+        getClient,
+      }),
+      getVariantCascade({
+        sessionId,
+        channelId: targetChannelId,
+        appId: effectiveAppId,
+      }),
+    ])
 
     if (!providersResponse.data) {
       await interaction.editReply({
@@ -284,14 +305,6 @@ export async function handleModelCommand({
       return
     }
 
-    // Get current model info to display
-    const currentModelInfo = await getCurrentModelInfo({
-      sessionId,
-      channelId: targetChannelId,
-      appId: channelAppId || appId,
-      getClient,
-    })
-
     const currentModelText = (() => {
       switch (currentModelInfo.type) {
         case 'session':
@@ -309,6 +322,13 @@ export async function handleModelCommand({
         case 'none':
           return '**Current:** none'
       }
+    })()
+
+    const variantText = (() => {
+      if (currentModelInfo.type === 'none' || !cascadeVariant) {
+        return ''
+      }
+      return `\n**Variant:** \`${cascadeVariant}\``
     })()
 
     // Store context with a short hash key to avoid customId length limits
@@ -341,7 +361,7 @@ export async function handleModelCommand({
     const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
 
     await interaction.editReply({
-      content: `**Set Model Preference**\n${currentModelText}\nSelect a provider:`,
+      content: `**Set Model Preference**\n${currentModelText}${variantText}\nSelect a provider:`,
       components: [actionRow],
     })
   } catch (error) {
@@ -520,44 +540,52 @@ export async function handleModelSelectMenu(
   const fullModelId = `${context.providerId}/${selectedModelId}`
 
   try {
-    // Always show scope selection menu
     context.selectedModelId = fullModelId
     pendingModelContexts.set(contextHash, context)
 
-    const scopeOptions = [
-      // Show "this session" option when in a thread with an active session
-      ...(context.isThread && context.sessionId
-        ? [
-            {
-              label: 'This session only',
-              value: 'session',
-              description: 'Override for this session only',
-            },
+    // Check if model has variants (thinking levels) - if so, show variant picker first
+    const getClient = await initializeOpencodeForDirectory(context.dir)
+    if (!(getClient instanceof Error)) {
+      const providersResponse = await getClient().provider.list({ query: { directory: context.dir } })
+      if (providersResponse.data) {
+        const variants = getThinkingValuesForModel({
+          providers: providersResponse.data.all,
+          providerId: context.providerId!,
+          modelId: selectedModelId,
+        })
+        if (variants.length > 0) {
+          context.availableVariants = variants
+          pendingModelContexts.set(contextHash, context)
+
+          const variantOptions = [
+            { label: 'None (default)', value: '__none__', description: 'Use the model without a specific thinking level' },
+            ...variants.slice(0, 24).map((v: string) => ({
+              label: v.slice(0, 100),
+              value: v,
+              description: `Use ${v} thinking`.slice(0, 100),
+            })),
           ]
-        : []),
-      {
-        label: 'This channel only',
-        value: 'channel',
-        description: 'Override for this channel only',
-      },
-      {
-        label: 'Global default',
-        value: 'global',
-        description: 'Set for this channel and as default for all others',
-      },
-    ]
 
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId(`model_scope:${contextHash}`)
-      .setPlaceholder('Apply to...')
-      .addOptions(scopeOptions)
+          const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`model_variant:${contextHash}`)
+            .setPlaceholder('Select a thinking level')
+            .addOptions(variantOptions)
 
-    const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
+          const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
 
-    await interaction.editReply({
-      content: `**Set Model Preference**\nModel: **${context.providerName}** / **${selectedModelId}**\n\`${fullModelId}\`\nApply to:`,
-      components: [actionRow],
-    })
+          await interaction.editReply({
+            content: `**Set Model Preference**\nModel: **${context.providerName}** / **${selectedModelId}**\n\`${fullModelId}\`\nSelect a thinking level:`,
+            components: [actionRow],
+          })
+          return
+        }
+      }
+    }
+
+    // No variants available - skip to scope
+    context.selectedVariant = null
+    pendingModelContexts.set(contextHash, context)
+    await showScopeMenu({ interaction, contextHash, context })
   } catch (error) {
     modelLogger.error('Error saving model preference:', error)
     await interaction.editReply({
@@ -565,6 +593,70 @@ export async function handleModelSelectMenu(
       components: [],
     })
   }
+}
+
+/**
+ * Handle the variant select menu interaction.
+ * Stores the selected variant and shows the scope menu.
+ */
+export async function handleModelVariantSelectMenu(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const customId = interaction.customId
+  if (!customId.startsWith('model_variant:')) {
+    return
+  }
+
+  await interaction.deferUpdate()
+
+  const contextHash = customId.replace('model_variant:', '')
+  const context = pendingModelContexts.get(contextHash)
+
+  if (!context || !context.selectedModelId) {
+    await interaction.editReply({ content: 'Selection expired. Please run /model again.', components: [] })
+    return
+  }
+
+  const selectedValue = interaction.values[0]
+  if (!selectedValue) {
+    await interaction.editReply({ content: 'No variant selected', components: [] })
+    return
+  }
+
+  context.selectedVariant = selectedValue === '__none__' ? null : selectedValue
+  pendingModelContexts.set(contextHash, context)
+
+  await showScopeMenu({ interaction, contextHash, context })
+}
+
+async function showScopeMenu({ interaction, contextHash, context }: {
+  interaction: StringSelectMenuInteraction
+  contextHash: string
+  context: NonNullable<ReturnType<typeof pendingModelContexts.get>>
+}): Promise<void> {
+  const modelId = context.selectedModelId!
+  const modelDisplay = modelId.split('/')[1] || modelId
+  const variantSuffix = context.selectedVariant ? ` (${context.selectedVariant})` : ''
+
+  const scopeOptions = [
+    ...(context.isThread && context.sessionId
+      ? [{ label: 'This session only', value: 'session', description: 'Override for this session only' }]
+      : []),
+    { label: 'This channel only', value: 'channel', description: 'Override for this channel only' },
+    { label: 'Global default', value: 'global', description: 'Set for this channel and as default for all others' },
+  ]
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`model_scope:${contextHash}`)
+    .setPlaceholder('Apply to...')
+    .addOptions(scopeOptions)
+
+  const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
+
+  await interaction.editReply({
+    content: `**Set Model Preference**\nModel: **${context.providerName}** / **${modelDisplay}**${variantSuffix}\n\`${modelId}\`\nApply to:`,
+    components: [actionRow],
+  })
 }
 
 /**
@@ -605,6 +697,9 @@ export async function handleModelScopeSelectMenu(
 
   const modelId = context.selectedModelId
   const modelDisplay = modelId.split('/')[1] || modelId
+  const variant = context.selectedVariant ?? null
+  const variantSuffix = variant ? ` (${variant})` : ''
+  const agentTip = '\n_Tip: create [agent .md files](https://github.com/remorses/kimaki/blob/main/docs/model-switching.md) in .opencode/agent/ for one-command model switching_'
 
   try {
     if (selectedScope === 'session') {
@@ -616,8 +711,8 @@ export async function handleModelScopeSelectMenu(
         })
         return
       }
-      await setSessionModel(context.sessionId, modelId)
-      modelLogger.log(`Set model ${modelId} for session ${context.sessionId}`)
+      await setSessionModel({ sessionId: context.sessionId, modelId, variant })
+      modelLogger.log(`Set model ${modelId}${variantSuffix} for session ${context.sessionId}`)
 
       let retried = false
       if (context.thread) {
@@ -631,7 +726,7 @@ export async function handleModelScopeSelectMenu(
 
       const retryNote = retried ? '\n_Retrying current request with new model..._' : ''
       await interaction.editReply({
-        content: `Model set for this session:\n**${context.providerName}** / **${modelDisplay}**\n\`${modelId}\`${retryNote}`,
+        content: `Model set for this session:\n**${context.providerName}** / **${modelDisplay}**${variantSuffix}\n\`${modelId}\`${retryNote}${agentTip}`,
         components: [],
       })
     } else if (selectedScope === 'global') {
@@ -643,21 +738,21 @@ export async function handleModelScopeSelectMenu(
         })
         return
       }
-      await setGlobalModel(context.appId, modelId)
-      await setChannelModel(context.channelId, modelId)
-      modelLogger.log(`Set global model ${modelId} for app ${context.appId} and channel ${context.channelId}`)
+      await setGlobalModel({ appId: context.appId, modelId, variant })
+      await setChannelModel({ channelId: context.channelId, modelId, variant })
+      modelLogger.log(`Set global model ${modelId}${variantSuffix} for app ${context.appId} and channel ${context.channelId}`)
 
       await interaction.editReply({
-        content: `Model set for this channel and as global default:\n**${context.providerName}** / **${modelDisplay}**\n\`${modelId}\`\nAll channels will use this model (unless they have their own override).`,
+        content: `Model set for this channel and as global default:\n**${context.providerName}** / **${modelDisplay}**${variantSuffix}\n\`${modelId}\`\nAll channels will use this model (unless they have their own override).${agentTip}`,
         components: [],
       })
     } else {
       // channel scope
-      await setChannelModel(context.channelId, modelId)
-      modelLogger.log(`Set model ${modelId} for channel ${context.channelId}`)
+      await setChannelModel({ channelId: context.channelId, modelId, variant })
+      modelLogger.log(`Set model ${modelId}${variantSuffix} for channel ${context.channelId}`)
 
       await interaction.editReply({
-        content: `Model preference set for this channel:\n**${context.providerName}** / **${modelDisplay}**\n\`${modelId}\`\nAll new sessions in this channel will use this model.`,
+        content: `Model preference set for this channel:\n**${context.providerName}** / **${modelDisplay}**${variantSuffix}\n\`${modelId}\`\nAll new sessions in this channel will use this model.${agentTip}`,
         components: [],
       })
     }

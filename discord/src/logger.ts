@@ -45,6 +45,7 @@ export const LogPrefix = {
   VERBOSITY: 'VERBOSE',
   VOICE: 'VOICE',
   WORKER: 'WORKER',
+  THINKING: 'THINK',
   WORKTREE: 'WORKTREE',
   XML: 'XML',
 } as const

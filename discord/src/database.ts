@@ -50,28 +50,34 @@ export type ThreadWorktree = {
 // Channel Model Functions
 // ============================================================================
 
+export type ModelPreference = { modelId: string; variant: string | null }
+
 /**
  * Get the model preference for a channel.
- * @returns Model ID in format "provider_id/model_id" or undefined
+ * @returns Model ID in format "provider_id/model_id" + optional variant, or undefined
  */
-export async function getChannelModel(channelId: string): Promise<string | undefined> {
+export async function getChannelModel(channelId: string): Promise<ModelPreference | undefined> {
     const prisma = await getPrisma()
     const row = await prisma.channel_models.findUnique({
         where: { channel_id: channelId },
     })
-    return row?.model_id
+    if (!row) {
+        return undefined
+    }
+    return { modelId: row.model_id, variant: row.variant }
 }
 
 /**
  * Set the model preference for a channel.
  * @param modelId Model ID in format "provider_id/model_id"
+ * @param variant Optional thinking/reasoning variant name
  */
-export async function setChannelModel(channelId: string, modelId: string): Promise<void> {
+export async function setChannelModel({ channelId, modelId, variant }: { channelId: string; modelId: string; variant?: string | null }): Promise<void> {
     const prisma = await getPrisma()
     await prisma.channel_models.upsert({
         where: { channel_id: channelId },
-        create: { channel_id: channelId, model_id: modelId },
-        update: { model_id: modelId, updated_at: new Date() },
+        create: { channel_id: channelId, model_id: modelId, variant: variant ?? null },
+        update: { model_id: modelId, variant: variant ?? null, updated_at: new Date() },
     })
 }
 
@@ -81,26 +87,30 @@ export async function setChannelModel(channelId: string, modelId: string): Promi
 
 /**
  * Get the global default model for a bot.
- * @returns Model ID in format "provider_id/model_id" or undefined
+ * @returns Model ID in format "provider_id/model_id" + optional variant, or undefined
  */
-export async function getGlobalModel(appId: string): Promise<string | undefined> {
+export async function getGlobalModel(appId: string): Promise<ModelPreference | undefined> {
     const prisma = await getPrisma()
     const row = await prisma.global_models.findUnique({
         where: { app_id: appId },
     })
-    return row?.model_id
+    if (!row) {
+        return undefined
+    }
+    return { modelId: row.model_id, variant: row.variant }
 }
 
 /**
  * Set the global default model for a bot.
  * @param modelId Model ID in format "provider_id/model_id"
+ * @param variant Optional thinking/reasoning variant name
  */
-export async function setGlobalModel(appId: string, modelId: string): Promise<void> {
+export async function setGlobalModel({ appId, modelId, variant }: { appId: string; modelId: string; variant?: string | null }): Promise<void> {
     const prisma = await getPrisma()
     await prisma.global_models.upsert({
         where: { app_id: appId },
-        create: { app_id: appId, model_id: modelId },
-        update: { model_id: modelId, updated_at: new Date() },
+        create: { app_id: appId, model_id: modelId, variant: variant ?? null },
+        update: { model_id: modelId, variant: variant ?? null, updated_at: new Date() },
     })
 }
 
@@ -110,26 +120,30 @@ export async function setGlobalModel(appId: string, modelId: string): Promise<vo
 
 /**
  * Get the model preference for a session.
- * @returns Model ID in format "provider_id/model_id" or undefined
+ * @returns Model ID in format "provider_id/model_id" + optional variant, or undefined
  */
-export async function getSessionModel(sessionId: string): Promise<string | undefined> {
+export async function getSessionModel(sessionId: string): Promise<ModelPreference | undefined> {
     const prisma = await getPrisma()
     const row = await prisma.session_models.findUnique({
         where: { session_id: sessionId },
     })
-    return row?.model_id
+    if (!row) {
+        return undefined
+    }
+    return { modelId: row.model_id, variant: row.variant }
 }
 
 /**
  * Set the model preference for a session.
  * @param modelId Model ID in format "provider_id/model_id"
+ * @param variant Optional thinking/reasoning variant name
  */
-export async function setSessionModel(sessionId: string, modelId: string): Promise<void> {
+export async function setSessionModel({ sessionId, modelId, variant }: { sessionId: string; modelId: string; variant?: string | null }): Promise<void> {
     const prisma = await getPrisma()
     await prisma.session_models.upsert({
         where: { session_id: sessionId },
-        create: { session_id: sessionId, model_id: modelId },
-        update: { model_id: modelId },
+        create: { session_id: sessionId, model_id: modelId, variant: variant ?? null },
+        update: { model_id: modelId, variant: variant ?? null },
     })
 }
 
@@ -142,6 +156,40 @@ export async function clearSessionModel(sessionId: string): Promise<void> {
     await prisma.session_models.deleteMany({
         where: { session_id: sessionId },
     })
+}
+
+// ============================================================================
+// Variant Cascade Resolution
+// ============================================================================
+
+/**
+ * Resolve the variant (thinking level) using the session → channel → global cascade.
+ * Returns the first non-null variant found, or undefined if none set at any level.
+ */
+export async function getVariantCascade({ sessionId, channelId, appId }: {
+    sessionId?: string
+    channelId?: string
+    appId?: string
+}): Promise<string | undefined> {
+    if (sessionId) {
+        const session = await getSessionModel(sessionId)
+        if (session?.variant) {
+            return session.variant
+        }
+    }
+    if (channelId) {
+        const channel = await getChannelModel(channelId)
+        if (channel?.variant) {
+            return channel.variant
+        }
+    }
+    if (appId) {
+        const global = await getGlobalModel(appId)
+        if (global?.variant) {
+            return global.variant
+        }
+    }
+    return undefined
 }
 
 // ============================================================================

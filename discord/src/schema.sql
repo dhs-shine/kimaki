@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS "thread_worktrees" (
 CREATE TABLE IF NOT EXISTS "channel_models" (
     "channel_id" TEXT NOT NULL PRIMARY KEY,
     "model_id" TEXT NOT NULL,
+    "variant" TEXT,
     "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "channel_models_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "channel_directories" ("channel_id") ON DELETE RESTRICT ON UPDATE CASCADE
@@ -51,6 +52,7 @@ CREATE TABLE IF NOT EXISTS "channel_models" (
 CREATE TABLE IF NOT EXISTS "session_models" (
     "session_id" TEXT NOT NULL PRIMARY KEY,
     "model_id" TEXT NOT NULL,
+    "variant" TEXT,
     "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS "channel_agents" (
@@ -88,6 +90,7 @@ CREATE TABLE IF NOT EXISTS "channel_mention_mode" (
 CREATE TABLE IF NOT EXISTS "global_models" (
     "app_id" TEXT NOT NULL PRIMARY KEY,
     "model_id" TEXT NOT NULL,
+    "variant" TEXT,
     "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "global_models_app_id_fkey" FOREIGN KEY ("app_id") REFERENCES "bot_tokens" ("app_id") ON DELETE RESTRICT ON UPDATE CASCADE

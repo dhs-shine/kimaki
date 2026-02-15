@@ -90,6 +90,38 @@ async function migrateSchema(prisma: PrismaClient): Promise<void> {
   for (const statement of statements) {
     await prisma.$executeRawUnsafe(statement)
   }
+
+  // Migration: add variant column to model tables (for thinking/reasoning level).
+  // ALTERs throw if column already exists, so each is wrapped in try/catch.
+  const alterStatements = [
+    'ALTER TABLE channel_models ADD COLUMN variant TEXT',
+    'ALTER TABLE session_models ADD COLUMN variant TEXT',
+    'ALTER TABLE global_models ADD COLUMN variant TEXT',
+  ]
+  for (const stmt of alterStatements) {
+    try {
+      await prisma.$executeRawUnsafe(stmt)
+    } catch {
+      // Column already exists – expected on subsequent runs
+    }
+  }
+
+  // Migration: move session_thinking data into session_models.variant.
+  // session_thinking table is left in place (not dropped) so older kimaki versions
+  // that still reference it won't crash on the same database.
+  try {
+    // For sessions that already have a model row, copy the thinking value
+    await prisma.$executeRawUnsafe(`
+      UPDATE session_models SET variant = (
+        SELECT thinking_value FROM session_thinking
+        WHERE session_thinking.session_id = session_models.session_id
+      ) WHERE variant IS NULL AND EXISTS (
+        SELECT 1 FROM session_thinking WHERE session_thinking.session_id = session_models.session_id
+      )
+    `)
+  } catch {
+    // session_thinking table may not exist in fresh installs
+  }
 }
 
 /**

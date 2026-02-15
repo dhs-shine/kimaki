@@ -49,6 +49,7 @@ import { handleRestartOpencodeServerCommand } from './commands/restart-opencode-
 import { handleRunCommand } from './commands/run-command.js'
 import { handleContextUsageCommand } from './commands/context-usage.js'
 import { handleUpgradeAndRestartCommand } from './commands/upgrade.js'
+import { handleModelVariantSelectMenu } from './commands/model.js'
 import { hasKimakiBotPermission } from './discord-utils.js'
 import { createLogger, LogPrefix } from './logger.js'
 
@@ -307,6 +308,11 @@ export function registerInteractionHandler({
         }
 
 
+
+        if (customId.startsWith('model_variant:')) {
+          await handleModelVariantSelectMenu(interaction)
+          return
+        }
 
         if (customId.startsWith('agent_select:')) {
           await handleAgentSelectMenu(interaction)

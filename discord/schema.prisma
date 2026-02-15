@@ -75,6 +75,7 @@ model thread_worktrees {
 model channel_models {
   channel_id String    @id
   model_id   String
+  variant    String?
   created_at DateTime? @default(now())
   updated_at DateTime? @default(now()) @updatedAt
 
@@ -84,6 +85,7 @@ model channel_models {
 model session_models {
   session_id String    @id
   model_id   String
+  variant    String?
   created_at DateTime? @default(now())
 }
 
@@ -131,6 +133,7 @@ model channel_mention_mode {
 model global_models {
   app_id     String    @id
   model_id   String
+  variant    String?
   created_at DateTime? @default(now())
   updated_at DateTime? @default(now()) @updatedAt
 

@@ -11,6 +11,7 @@ import path from 'node:path'
 import { xdgState } from 'xdg-basedir'
 import {
   getSessionAgent,
+  getVariantCascade,
   getChannelAgent,
   setSessionAgent,
   getThreadWorktree,
@@ -44,6 +45,7 @@ import {
   arePatternsCoveredBy,
 } from './commands/permissions.js'
 import { cancelPendingFileUpload } from './commands/file-upload.js'
+import { getThinkingValuesForModel, matchThinkingValue } from './thinking-utils.js'
 import { execAsync } from './worktree-utils.js'
 import * as errore from 'errore'
 
@@ -641,7 +643,7 @@ export async function handleOpencodeSession({
     sessionLogger.log(`[AGENT] Resolved agent preference early: ${earlyAgentPreference}`)
   }
 
-  const earlyModelResult = await errore.tryAsync(async () => {
+  const earlyModelResult = await errore.try(() => {
     if (model) {
       const [providerID, ...modelParts] = model.split('/')
       const modelID = modelParts.join('/')
@@ -678,6 +680,43 @@ export async function handleOpencodeSession({
     )
     return
   }
+
+  // Resolve variant (thinking level) from session → channel → global cascade,
+  // then validate it against the current model's available variants.
+  const earlyThinkingValue = await (async (): Promise<string | undefined> => {
+    const channelInfo = channelId ? await getChannelDirectory(channelId) : undefined
+    const resolvedAppId = channelInfo?.appId ?? appId
+    const preferredVariant = await getVariantCascade({
+      sessionId: session.id,
+      channelId,
+      appId: resolvedAppId,
+    })
+    if (!preferredVariant) {
+      return undefined
+    }
+    const providersResponse = await errore.tryAsync(() => {
+      return getClient().provider.list({ query: { directory: sdkDirectory } })
+    })
+    if (providersResponse instanceof Error || !providersResponse.data) {
+      return undefined
+    }
+    const availableValues = getThinkingValuesForModel({
+      providers: providersResponse.data.all,
+      providerId: earlyModelParam.providerID,
+      modelId: earlyModelParam.modelID,
+    })
+    if (availableValues.length === 0) {
+      sessionLogger.log(`[THINK] Model ${earlyModelParam.providerID}/${earlyModelParam.modelID} has no variants, ignoring preference`)
+      return undefined
+    }
+    const matched = matchThinkingValue({ requestedValue: preferredVariant, availableValues })
+    if (!matched) {
+      sessionLogger.log(`[THINK] Preference "${preferredVariant}" invalid for current model, ignoring`)
+      return undefined
+    }
+    sessionLogger.log(`[THINK] Using variant: ${matched}`)
+    return matched
+  })()
 
   const abortController = new AbortController()
   abortControllers.set(session.id, abortController)
@@ -1729,6 +1768,9 @@ export async function handleOpencodeSession({
 
     hasSentParts = false
 
+    // variant is accepted by the server API but not yet in the v1 SDK types
+    const variantField = earlyThinkingValue ? { variant: earlyThinkingValue } : {}
+
     const response = command
       ? await getClient().session.command({
           path: { id: session.id },
@@ -1737,6 +1779,7 @@ export async function handleOpencodeSession({
             command: command.name,
             arguments: command.arguments,
             agent: agentPreference,
+            ...variantField,
           },
           signal: abortController.signal,
         })
@@ -1756,6 +1799,7 @@ export async function handleOpencodeSession({
             }),
             model: modelParam,
             agent: agentPreference,
+            ...variantField,
           },
           signal: abortController.signal,
         })

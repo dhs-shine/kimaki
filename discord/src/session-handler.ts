@@ -494,21 +494,29 @@ export async function handleOpencodeSession({
   const directory = projectDirectory || process.cwd()
   sessionLogger.log(`Using directory: ${directory}`)
 
-  // Get worktree info early so we can use the correct directory for events and prompts
-  const worktreeInfo = await getThreadWorktree(thread.id)
+  // Fire all independent lookups in parallel. initializeOpencodeForDirectory is the
+  // slowest (spawns server on cold start), so starting it immediately alongside
+  // the DB lookups saves the most time.
+  const [worktreeInfo, existingSessionId, initResult] = await Promise.all([
+    getThreadWorktree(thread.id),
+    getThreadSession(thread.id),
+    initializeOpencodeForDirectory(directory),
+  ])
+
   const worktreeDirectory =
     worktreeInfo?.status === 'ready' && worktreeInfo.worktree_directory
       ? worktreeInfo.worktree_directory
       : undefined
-  // Use worktree directory for SDK calls if available, otherwise project directory
   const sdkDirectory = worktreeDirectory || directory
   if (worktreeDirectory) {
     sessionLogger.log(`Using worktree directory for SDK calls: ${worktreeDirectory}`)
   }
 
-  // When in worktree, pass original repo directory so AI can access files there
+  // Re-initialize with worktree info if needed (passes originalRepoDirectory)
   const originalRepoDirectory = worktreeDirectory ? worktreeInfo?.project_directory : undefined
-  const getClient = await initializeOpencodeForDirectory(directory, { originalRepoDirectory })
+  const getClient = originalRepoDirectory
+    ? await initializeOpencodeForDirectory(directory, { originalRepoDirectory })
+    : initResult
   if (getClient instanceof Error) {
     await sendThreadMessage(thread, `✗ ${getClient.message}`)
     return
@@ -517,7 +525,7 @@ export async function handleOpencodeSession({
   const serverEntry = getOpencodeServers().get(directory)
   const port = serverEntry?.port
 
-  let sessionId = await getThreadSession(thread.id)
+  let sessionId = existingSessionId
   let session
 
   if (sessionId) {
@@ -625,15 +633,24 @@ export async function handleOpencodeSession({
 
   // Snapshot model+agent early so user changes (e.g. /agent) during the async gap
   // (debounce, previous handler wait, event subscribe) don't affect this request.
-  // The model chosen at message-send time is the one used for the prompt.
-  const earlyAgentResult = await errore.tryAsync(() => {
-    return resolveValidatedAgentPreference({
-      agent,
+  // Parallelize: agent preference, channel directory lookup, and variant cascade
+  // are all independent. Fetch them together, then resolve model (needs agent + channelInfo).
+  const [earlyAgentResult, channelInfo, preferredVariant] = await Promise.all([
+    errore.tryAsync(() => {
+      return resolveValidatedAgentPreference({
+        agent,
+        sessionId: session.id,
+        channelId,
+        getClient,
+      })
+    }),
+    channelId ? getChannelDirectory(channelId) : Promise.resolve(undefined),
+    getVariantCascade({
       sessionId: session.id,
       channelId,
-      getClient,
-    })
-  })
+      appId,
+    }),
+  ])
   if (earlyAgentResult instanceof Error) {
     await sendThreadMessage(thread, `Failed to resolve agent: ${earlyAgentResult.message}`)
     return
@@ -643,7 +660,9 @@ export async function handleOpencodeSession({
     sessionLogger.log(`[AGENT] Resolved agent preference early: ${earlyAgentPreference}`)
   }
 
-  const earlyModelResult = await errore.try(() => {
+  const resolvedAppId = channelInfo?.appId ?? appId
+
+  const earlyModelResult = await errore.tryAsync(async () => {
     if (model) {
       const [providerID, ...modelParts] = model.split('/')
       const modelID = modelParts.join('/')
@@ -652,8 +671,6 @@ export async function handleOpencodeSession({
         return { providerID, modelID }
       }
     }
-    const channelInfo = channelId ? await getChannelDirectory(channelId) : undefined
-    const resolvedAppId = channelInfo?.appId ?? appId
     const modelInfo = await getCurrentModelInfo({
       sessionId: session.id,
       channelId,
@@ -681,16 +698,9 @@ export async function handleOpencodeSession({
     return
   }
 
-  // Resolve variant (thinking level) from session → channel → global cascade,
-  // then validate it against the current model's available variants.
+  // Validate the preferred variant against the current model's available variants.
+  // preferredVariant was already fetched in parallel above.
   const earlyThinkingValue = await (async (): Promise<string | undefined> => {
-    const channelInfo = channelId ? await getChannelDirectory(channelId) : undefined
-    const resolvedAppId = channelInfo?.appId ?? appId
-    const preferredVariant = await getVariantCascade({
-      sessionId: session.id,
-      channelId,
-      appId: resolvedAppId,
-    })
     if (!preferredVariant) {
       return undefined
     }

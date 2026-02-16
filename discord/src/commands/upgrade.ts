@@ -30,6 +30,10 @@ export async function handleUpgradeAndRestartCommand({ command }: CommandContext
       content: `Upgraded kimaki **v${currentVersion}** -> **v${newVersion}**. Restarting bot...`,
     })
 
+    // Spawning bare `kimaki` works even if the user originally ran via npx/bunx:
+    // `npm i -g kimaki@latest` creates a global bin link, and npx resolves
+    // local -> global -> cache -> registry, so it prefers the global install.
+    // bunx shares the same global cache, so it also picks up the new version.
     const child = spawn('kimaki', process.argv.slice(2), {
       shell: true,
       stdio: 'ignore',

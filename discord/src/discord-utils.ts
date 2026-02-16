@@ -482,15 +482,7 @@ export async function sendThreadMessage(
       continue
     }
 
-    // If custom flags provided, send as single message (no chunking)
-    if (options?.flags !== undefined) {
-      const message = await thread.send({ content: text, flags: options.flags })
-      if (!firstMessage) {
-        firstMessage = message
-      }
-      continue
-    }
-
+    const sendFlags = options?.flags ?? SILENT_MESSAGE_FLAGS
     const chunks = splitMarkdownForDiscord({ content: text, maxLength: MAX_LENGTH })
 
     if (chunks.length > 1) {
@@ -501,7 +493,7 @@ export async function sendThreadMessage(
       if (!chunk) {
         continue
       }
-      const message = await thread.send({ content: chunk, flags: SILENT_MESSAGE_FLAGS })
+      const message = await thread.send({ content: chunk, flags: sendFlags })
       if (!firstMessage) {
         firstMessage = message
       }

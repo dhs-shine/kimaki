@@ -270,7 +270,7 @@ export async function setupVoiceHandling({
           const textChannel = await discordClient.channels.fetch(textChannelId)
           if (textChannel?.isTextBased() && 'send' in textChannel) {
             await textChannel.send({
-              content: `⚠️ Voice session error: ${error}`,
+              content: `⚠️ Voice session error: ${String(error).slice(0, 1900)}`,
               flags: SILENT_MESSAGE_FLAGS,
             })
           }

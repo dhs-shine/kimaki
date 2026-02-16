@@ -294,7 +294,7 @@ export async function startDiscordBot({
           }
           if (worktreeInfo.status === 'error') {
             await message.reply({
-              content: `❌ Worktree creation failed: ${worktreeInfo.error_message}`,
+              content: `❌ Worktree creation failed: ${(worktreeInfo.error_message || '').slice(0, 1900)}`,
               flags: SILENT_MESSAGE_FLAGS,
             })
             return
@@ -319,7 +319,7 @@ export async function startDiscordBot({
         if (projectDirectory && !fs.existsSync(projectDirectory)) {
           discordLogger.error(`Directory does not exist: ${projectDirectory}`)
           await message.reply({
-            content: `✗ Directory does not exist: ${JSON.stringify(projectDirectory)}`,
+            content: `✗ Directory does not exist: ${JSON.stringify(projectDirectory).slice(0, 1900)}`,
             flags: SILENT_MESSAGE_FLAGS,
           })
           return
@@ -334,7 +334,9 @@ export async function startDiscordBot({
               worktreeInfo?.status === 'ready' && worktreeInfo.worktree_directory
                 ? worktreeInfo.worktree_directory
                 : projectDirectory
-            const loadingReply = await message.reply({ content: `Running \`${shellCmd}\`...` })
+            const loadingReply = await message.reply({
+              content: `Running \`${shellCmd.slice(0, 1900)}\`...`,
+            })
             const result = await runShellCommand({ command: shellCmd, directory: shellDir })
             await loadingReply.edit({ content: result })
             return
@@ -503,7 +505,7 @@ export async function startDiscordBot({
         if (!fs.existsSync(projectDirectory)) {
           discordLogger.error(`Directory does not exist: ${projectDirectory}`)
           await message.reply({
-            content: `✗ Directory does not exist: ${JSON.stringify(projectDirectory)}`,
+            content: `✗ Directory does not exist: ${JSON.stringify(projectDirectory).slice(0, 1900)}`,
             flags: SILENT_MESSAGE_FLAGS,
           })
           return
@@ -513,7 +515,9 @@ export async function startDiscordBot({
         if (message.content?.startsWith('!')) {
           const shellCmd = message.content.slice(1).trim()
           if (shellCmd) {
-            const loadingReply = await message.reply({ content: `Running \`${shellCmd}\`...` })
+            const loadingReply = await message.reply({
+              content: `Running \`${shellCmd.slice(0, 1900)}\`...`,
+            })
             const result = await runShellCommand({ command: shellCmd, directory: projectDirectory })
             await loadingReply.edit({ content: result })
             return
@@ -630,7 +634,7 @@ export async function startDiscordBot({
     } catch (error) {
       voiceLogger.error('Discord handler error:', error)
       try {
-        const errMsg = error instanceof Error ? error.message : String(error)
+        const errMsg = (error instanceof Error ? error.message : String(error)).slice(0, 1900)
         await message.reply({ content: `Error: ${errMsg}`, flags: SILENT_MESSAGE_FLAGS })
       } catch (sendError) {
         voiceLogger.error(
@@ -710,7 +714,7 @@ export async function startDiscordBot({
       if (!fs.existsSync(projectDirectory)) {
         discordLogger.error(`[BOT_SESSION] Directory does not exist: ${projectDirectory}`)
         await thread.send({
-          content: `✗ Directory does not exist: ${JSON.stringify(projectDirectory)}`,
+          content: `✗ Directory does not exist: ${JSON.stringify(projectDirectory).slice(0, 1900)}`,
           flags: SILENT_MESSAGE_FLAGS,
         })
         return
@@ -796,7 +800,7 @@ export async function startDiscordBot({
     } catch (error) {
       voiceLogger.error('[BOT_SESSION] Error handling bot-initiated thread:', error)
       try {
-        const errMsg = error instanceof Error ? error.message : String(error)
+        const errMsg = (error instanceof Error ? error.message : String(error)).slice(0, 1900)
         await thread.send({ content: `Error: ${errMsg}`, flags: SILENT_MESSAGE_FLAGS })
       } catch (sendError) {
         voiceLogger.error(

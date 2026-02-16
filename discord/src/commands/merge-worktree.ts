@@ -84,7 +84,7 @@ async function sendPromptToModel({
     logger.error(`[merge] Failed to send prompt to model:`, e)
     sendThreadMessage(
       thread,
-      `Failed to send prompt: ${e instanceof Error ? e.message : String(e)}`,
+      `Failed to send prompt: ${(e instanceof Error ? e.message : String(e)).slice(0, 1900)}`,
     ).catch(() => {})
   })
 }

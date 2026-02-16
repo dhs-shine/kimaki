@@ -124,7 +124,7 @@ export function showFileUploadButton({
             .fetch(ctx.messageId)
             .then((msg) => {
               return msg.edit({
-                content: `**File Upload Requested**\n${prompt}\n_Timed out_`,
+                content: `**File Upload Requested**\n${prompt.slice(0, 1900)}\n_Timed out_`,
                 components: [],
               })
             })
@@ -157,7 +157,7 @@ export function showFileUploadButton({
 
     thread
       .send({
-        content: `**File Upload Requested**\n${prompt}`,
+        content: `**File Upload Requested**\n${prompt.slice(0, 1900)}`,
         components: [actionRow],
         flags: NOTIFY_MESSAGE_FLAGS,
       })
@@ -326,7 +326,7 @@ function updateButtonMessage(context: PendingFileUploadContext, status: string):
     .fetch(context.messageId)
     .then((msg) => {
       return msg.edit({
-        content: `**File Upload Requested**\n${context.prompt}\n${status}`,
+        content: `**File Upload Requested**\n${context.prompt.slice(0, 1900)}\n${status}`,
         components: [],
       })
     })

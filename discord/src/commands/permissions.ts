@@ -124,12 +124,13 @@ export async function showPermissionButtons({
   )
 
   const subtaskLine = subtaskLabel ? `**From:** \`${subtaskLabel}\`\n` : ''
+  const fullContent =
+    `⚠️ **Permission Required**\n` +
+    subtaskLine +
+    `**Type:** \`${permission.permission}\`\n` +
+    (patternStr ? `**Pattern:** \`${patternStr}\`` : '')
   const permissionMessage = await thread.send({
-    content:
-      `⚠️ **Permission Required**\n` +
-      subtaskLine +
-      `**Type:** \`${permission.permission}\`\n` +
-      (patternStr ? `**Pattern:** \`${patternStr}\`` : ''),
+    content: fullContent.slice(0, 1900),
     components: [actionRow],
     flags: NOTIFY_MESSAGE_FLAGS,
   })

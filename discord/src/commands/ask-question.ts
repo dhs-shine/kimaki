@@ -111,7 +111,7 @@ export async function showAskUserQuestionDropdowns({
     const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
 
     await thread.send({
-      content: `**${q.header}**\n${q.question}`,
+      content: `**${(q.header || '').slice(0, 200)}**\n${q.question.slice(0, 1700)}`,
       components: [actionRow],
       flags: NOTIFY_MESSAGE_FLAGS,
     })

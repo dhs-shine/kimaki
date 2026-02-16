@@ -74,6 +74,17 @@ use `resolveWorkingDirectory({ channel })` from `discord-utils.ts` to get direct
 
 never call `getKimakiMetadata` + manual `getThreadWorktree` check in commands. the util handles both. if you need to encode a directory in a discord customId for later use with `initializeOpencodeForDirectory`, always use `projectDirectory` not `workingDirectory`.
 
+## discord component custom ids
+
+discord message components (buttons, select menus, modals) enforce a strict `custom_id` max length of **100 chars**.
+
+never embed long strings in `custom_id` (absolute paths, base64 of paths, serialized json, session transcripts, etc) or the builder will throw errors like `Invalid string length`.
+
+instead:
+- store only short identifiers in `custom_id` (eg `contextHash`, a db id, or a session id)
+- resolve anything else at interaction time (eg call `resolveWorkingDirectory({ channel })` from the thread)
+- if you need extra context, store it server-side keyed by the short hash/id rather than encoding it into `custom_id`
+
 ## heap snapshots and memory debugging
 
 kimaki has a built-in heap monitor that runs every 30s and checks V8 heap usage.
@@ -95,6 +106,10 @@ signal summary:
 - `SIGUSR2`: graceful restart (existing)
 
 the implementation is in `discord/src/heap-monitor.ts`.
+
+## goke cli
+
+this project uses goke (not cac) for CLI parsing. goke auto-infers option types from `.option()` calls. never add manual type annotations to `.action()` callback options. just use `.action(async (options) => { ... })` and let goke infer the types.
 
 ## logging
 
@@ -603,26 +618,3 @@ const jsonSchema = toJSONSchema(mySchema, {
 });
 ```
 
-
-<!-- opensrc:start -->
-
-## Source Code Reference
-
-Source code for dependencies is available in `opensrc/` for deeper understanding of implementation details.
-
-See `opensrc/sources.json` for the list of available packages and their versions.
-
-Use this source code when you need to understand how a package works internally, not just its types/interface.
-
-### Fetching Additional Source Code
-
-To fetch source code for a package or repository you need to understand, run:
-
-```bash
-npx opensrc <package>           # npm package (e.g., npx opensrc zod)
-npx opensrc pypi:<package>      # Python package (e.g., npx opensrc pypi:requests)
-npx opensrc crates:<package>    # Rust crate (e.g., npx opensrc crates:serde)
-npx opensrc <owner>/<repo>      # GitHub repo (e.g., npx opensrc vercel/ai)
-```
-
-<!-- opensrc:end -->

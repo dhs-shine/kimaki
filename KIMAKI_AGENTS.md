@@ -105,6 +105,10 @@ signal summary:
 
 the implementation is in `discord/src/heap-monitor.ts`.
 
+## goke cli
+
+this project uses goke (not cac) for CLI parsing. goke auto-infers option types from `.option()` calls. never add manual type annotations to `.action()` callback options. just use `.action(async (options) => { ... })` and let goke infer the types.
+
 ## logging
 
 always try to use logger instead of console. so logs in the cli look uniform and pretty

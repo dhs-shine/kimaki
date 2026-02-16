@@ -2784,7 +2784,7 @@ cli
 cli
   .command('upgrade', 'Upgrade kimaki to the latest version and restart the running bot')
   .option('--skip-restart', 'Only upgrade, do not restart the running bot')
-  .action(async (options: { skipRestart?: boolean }) => {
+  .action(async (options) => {
     try {
       const current = getCurrentVersion()
       cliLogger.log(`Current version: v${current}`)

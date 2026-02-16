@@ -2781,24 +2781,42 @@ cli
     }
   })
 
-cli.command('upgrade', 'Upgrade kimaki to the latest version').action(async () => {
-  try {
-    const current = getCurrentVersion()
-    cliLogger.log(`Current version: v${current}`)
+cli
+  .command('upgrade', 'Upgrade kimaki to the latest version and restart the running bot')
+  .option('--skip-restart', 'Only upgrade, do not restart the running bot')
+  .action(async (options: { skipRestart?: boolean }) => {
+    try {
+      const current = getCurrentVersion()
+      cliLogger.log(`Current version: v${current}`)
 
-    const newVersion = await upgrade()
-    if (!newVersion) {
-      cliLogger.log('Already on latest version')
+      const newVersion = await upgrade()
+      if (!newVersion) {
+        cliLogger.log('Already on latest version')
+        process.exit(0)
+      }
+
+      cliLogger.log(`Upgraded to v${newVersion}`)
+
+      if (options.skipRestart) {
+        process.exit(0)
+      }
+
+      // Spawn a new kimaki process without args (starts the bot with default command).
+      // The new process kills the old one via the single-instance lock.
+      // No args passed to avoid recursively running `upgrade` again.
+      const child = spawn('kimaki', [], {
+        shell: true,
+        stdio: 'ignore',
+        detached: true,
+      })
+      child.unref()
+      cliLogger.log('Restarting bot with new version...')
       process.exit(0)
+    } catch (error) {
+      cliLogger.error('Upgrade failed:', error instanceof Error ? error.message : String(error))
+      process.exit(EXIT_NO_RESTART)
     }
-
-    cliLogger.log(`Upgraded to v${newVersion}`)
-    process.exit(0)
-  } catch (error) {
-    cliLogger.error('Upgrade failed:', error instanceof Error ? error.message : String(error))
-    process.exit(EXIT_NO_RESTART)
-  }
-})
+  })
 
 cli
   .command(

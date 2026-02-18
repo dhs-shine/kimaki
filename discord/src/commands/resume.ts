@@ -73,7 +73,7 @@ export async function handleResumeCommand({ command, appId }: CommandContext): P
     }
 
     const sessionResponse = await getClient().session.get({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
 
     if (!sessionResponse.data) {
@@ -97,7 +97,7 @@ export async function handleResumeCommand({ command, appId }: CommandContext): P
     logger.log(`[RESUME] Created thread ${thread.id} for session ${sessionId}`)
 
     const messagesResponse = await getClient().session.messages({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
 
     if (!messagesResponse.data) {

@@ -80,7 +80,7 @@ export async function handleForkCommand(interaction: ChatInputCommandInteraction
 
   try {
     const messagesResponse = await getClient().session.messages({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
 
     if (!messagesResponse.data) {
@@ -199,8 +199,8 @@ export async function handleForkSelectMenu(
 
   try {
     const forkResponse = await getClient().session.fork({
-      path: { id: sessionId },
-      body: { messageID: selectedMessageId },
+      sessionID: sessionId,
+      messageID: selectedMessageId,
     })
 
     if (!forkResponse.data) {
@@ -250,7 +250,7 @@ export async function handleForkSelectMenu(
 
     // Fetch and display the last assistant messages from the forked session
     const messagesResponse = await getClient().session.messages({
-      path: { id: forkedSession.id },
+      sessionID: forkedSession.id,
     })
 
     if (messagesResponse.data) {

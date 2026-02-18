@@ -125,7 +125,7 @@ async function handleAgentAutocomplete({ interaction, appId }: AutocompleteConte
     }
 
     const agentsResponse = await getClient().app.agents({
-      query: { directory: projectDirectory },
+      directory: projectDirectory,
     })
 
     if (!agentsResponse.data || agentsResponse.data.length === 0) {
@@ -203,9 +203,7 @@ export async function handleSessionAutocomplete({
     }
 
     const response = await getClient().find.files({
-      query: {
-        query: currentQuery || '',
-      },
+      query: currentQuery || '',
     })
 
     const files = response.data || []

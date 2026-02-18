@@ -63,7 +63,7 @@ export async function waitForSessionComplete({
 
   while (Date.now() - startTime < timeoutMs) {
     const messagesResponse = await getClient().session.messages({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
     const messages = messagesResponse.data || []
 

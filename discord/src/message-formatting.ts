@@ -2,8 +2,7 @@
 // Converts SDK message parts (text, tools, reasoning) to Discord-friendly format,
 // handles file attachments, and provides tool summary generation.
 
-import type { Part } from '@opencode-ai/sdk/v2'
-import type { FilePartInput } from '@opencode-ai/sdk'
+import type { Part, FilePartInput } from '@opencode-ai/sdk/v2'
 import type { Message, TextChannel } from 'discord.js'
 
 // Extended FilePartInput with original Discord URL for reference in prompts

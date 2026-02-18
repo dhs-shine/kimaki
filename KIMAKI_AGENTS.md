@@ -2,6 +2,14 @@ after every change always run tsc inside discord to validate your changes. try t
 
 do not use spawnSync. use our util execAsync. which uses spawn under the hood
 
+## opencode SDK
+
+always import from `@opencode-ai/sdk/v2`, never from `@opencode-ai/sdk` (v1). the v2 SDK uses flat parameters instead of nested `path`/`query`/`body` objects. for example:
+- `session.get({ sessionID: id })` not `session.get({ path: { id } })`
+- `session.messages({ sessionID: id, directory })` not `session.messages({ path: { id }, query: { directory } })`
+- `session.create({ title, directory })` not `session.create({ body: { title }, query: { directory } })`
+- `provider.list({ directory })` not `provider.list({ query: { directory } })`
+
 # restarting the discord bot
 
 ONLY restart the discord bot if the user explicitly asks for it.

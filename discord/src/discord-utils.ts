@@ -12,7 +12,7 @@ import {
   type ThreadChannel,
 } from 'discord.js'
 import { REST, Routes } from 'discord.js'
-import type { OpencodeClient } from '@opencode-ai/sdk'
+import type { OpencodeClient } from '@opencode-ai/sdk/v2'
 import { Lexer } from 'marked'
 import { splitTablesFromMarkdown } from './format-tables.js'
 import { getChannelDirectory, getThreadWorktree } from './database.js'
@@ -138,7 +138,7 @@ export async function archiveThread({
     const updateResult = await errore.tryAsync({
       try: async () => {
         const sessionResponse = await client.session.get({
-          path: { id: sessionId },
+          sessionID: sessionId,
         })
         if (!sessionResponse.data) {
           return
@@ -146,8 +146,8 @@ export async function archiveThread({
         const currentTitle = sessionResponse.data.title || ''
         const newTitle = currentTitle.startsWith('📁') ? currentTitle : `📁 ${currentTitle}`.trim()
         await client.session.update({
-          path: { id: sessionId },
-          body: { title: newTitle },
+          sessionID: sessionId,
+          title: newTitle,
         })
       },
       catch: (e) => new Error('Failed to update session title', { cause: e }),
@@ -158,7 +158,7 @@ export async function archiveThread({
 
     const abortResult = await errore.tryAsync({
       try: async () => {
-        await client.session.abort({ path: { id: sessionId } })
+        await client.session.abort({ sessionID: sessionId })
       },
       catch: (e) => new Error('Failed to abort session', { cause: e }),
     })

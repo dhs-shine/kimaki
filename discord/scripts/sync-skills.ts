@@ -25,6 +25,8 @@ const execAsync = promisify(exec)
 const SKILL_SOURCES: string[] = [
   'https://github.com/remorses/playwriter',
   'https://github.com/remorses/tuistory',
+  'https://github.com/remorses/zele',
+  'https://github.com/remorses/critique',
 ]
 
 // Directories to skip during recursive SKILL.md search

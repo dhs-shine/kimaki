@@ -11,7 +11,7 @@ import {
 } from 'discord.js'
 import crypto from 'node:crypto'
 import { sendThreadMessage, NOTIFY_MESSAGE_FLAGS } from '../discord-utils.js'
-import { getOpencodeClientV2 } from '../opencode.js'
+import { getOpencodeClient } from '../opencode.js'
 import { createLogger, LogPrefix } from '../logger.js'
 
 const logger = createLogger(LogPrefix.ASK_QUESTION)
@@ -200,8 +200,8 @@ export async function handleAskQuestionSelectMenu(
  */
 async function submitQuestionAnswers(context: PendingQuestionContext): Promise<void> {
   try {
-    const clientV2 = getOpencodeClientV2(context.directory)
-    if (!clientV2) {
+    const client = getOpencodeClient(context.directory)
+    if (!client) {
       throw new Error('OpenCode server not found for directory')
     }
 
@@ -210,8 +210,9 @@ async function submitQuestionAnswers(context: PendingQuestionContext): Promise<v
       return context.answers[i] || []
     })
 
-    await clientV2.question.reply({
+    await client.question.reply({
       requestID: context.requestId,
+      directory: context.directory,
       answers,
     })
 
@@ -291,8 +292,8 @@ export async function cancelPendingQuestion(
   }
 
   try {
-    const clientV2 = getOpencodeClientV2(context.directory)
-    if (!clientV2) {
+    const client = getOpencodeClient(context.directory)
+    if (!client) {
       throw new Error('OpenCode server not found for directory')
     }
 
@@ -302,8 +303,9 @@ export async function cancelPendingQuestion(
       return context.answers[i] || [customAnswer]
     })
 
-    await clientV2.question.reply({
+    await client.question.reply({
       requestID: context.requestId,
+      directory: context.directory,
       answers,
     })
 

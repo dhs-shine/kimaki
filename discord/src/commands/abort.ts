@@ -82,7 +82,7 @@ export async function handleAbortCommand({ command }: CommandContext): Promise<v
       `[ABORT-API] reason=user-requested sessionId=${sessionId} channelId=${channel.id} - sending API abort from /abort command`,
     )
     await getClient().session.abort({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
 
     await command.reply({

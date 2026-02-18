@@ -86,8 +86,8 @@ export async function handleContextUsageCommand({ command }: CommandContext): Pr
 
   try {
     const messagesResponse = await getClient().session.messages({
-      path: { id: sessionId },
-      query: { directory: workingDirectory },
+      sessionID: sessionId,
+      directory: workingDirectory,
     })
 
     const messages = messagesResponse.data || []
@@ -132,7 +132,7 @@ export async function handleContextUsageCommand({ command }: CommandContext): Pr
     // Fetch model context limit from provider API
     let contextLimit: number | undefined
     const providersResult = await errore.tryAsync(() => {
-      return getClient().provider.list({ query: { directory: workingDirectory } })
+      return getClient().provider.list({ directory: workingDirectory })
     })
     if (providersResult instanceof Error) {
       logger.error('[CONTEXT-USAGE] Failed to fetch provider info:', providersResult)

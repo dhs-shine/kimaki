@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import path from 'node:path'
-import { createOpencodeClient } from '@opencode-ai/sdk'
+import { createOpencodeClient } from '@opencode-ai/sdk/v2'
 
 async function testProjectList() {
   const port = process.env.OPENCODE_PORT || '3318'
@@ -10,7 +10,7 @@ async function testProjectList() {
 
   const client = createOpencodeClient({ baseUrl })
 
-  const result = await client.project.list({})
+  const result = await client.project.list()
   const projects = result.data || []
 
   console.log(`Total projects from OpenCode: ${projects.length}`)

@@ -207,7 +207,7 @@ export async function handleAgentCommand({
     }
 
     const agentsResponse = await getClient().app.agents({
-      query: { directory: context.dir },
+      directory: context.dir,
     })
 
     if (!agentsResponse.data || agentsResponse.data.length === 0) {

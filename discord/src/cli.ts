@@ -42,7 +42,7 @@ import { formatWorktreeName } from './commands/worktree.js'
 import { WORKTREE_PREFIX } from './commands/merge-worktree.js'
 import type { ThreadStartMarker } from './system-message.js'
 import yaml from 'js-yaml'
-import type { OpencodeClient, Command as OpencodeCommand } from '@opencode-ai/sdk'
+import type { OpencodeClient, Command as OpencodeCommand } from '@opencode-ai/sdk/v2'
 import {
   Events,
   ChannelType,
@@ -975,7 +975,7 @@ async function backgroundInit({
 
     const [userCommands, agents] = await Promise.all([
       getClient()
-        .command.list({ query: { directory: currentDir } })
+        .command.list({ directory: currentDir })
         .then((r) => r.data || [])
         .catch((error) => {
           cliLogger.warn(
@@ -985,7 +985,7 @@ async function backgroundInit({
           return []
         }),
       getClient()
-        .app.agents({ query: { directory: currentDir } })
+        .app.agents({ directory: currentDir })
         .then((r) => r.data || [])
         .catch((error) => {
           cliLogger.warn(
@@ -1296,7 +1296,7 @@ async function run({ restart, addChannels, useWorktrees, enableVoiceChannels }: 
   // Fetch projects, commands, and agents in parallel
   const [projects, allUserCommands, allAgents] = await Promise.all([
     getClient()
-      .project.list({})
+      .project.list()
       .then((r) => r.data || [])
       .catch((error) => {
         cliLogger.log('Failed to fetch projects')
@@ -1305,7 +1305,7 @@ async function run({ restart, addChannels, useWorktrees, enableVoiceChannels }: 
         process.exit(EXIT_NO_RESTART)
       }),
     getClient()
-      .command.list({ query: { directory: currentDir } })
+      .command.list({ directory: currentDir })
       .then((r) => r.data || [])
       .catch((error) => {
         cliLogger.warn(
@@ -1315,7 +1315,7 @@ async function run({ restart, addChannels, useWorktrees, enableVoiceChannels }: 
         return []
       }),
     getClient()
-      .app.agents({ query: { directory: currentDir } })
+      .app.agents({ directory: currentDir })
       .then((r) => r.data || [])
       .catch((error) => {
         cliLogger.warn(
@@ -2672,7 +2672,7 @@ cli
       // project.list() returns all known projects globally from any OpenCode server,
       // but session.list/get are scoped to the server's own project. So we try each.
       cliLogger.log('Session not in current project, searching all projects...')
-      const projectsResponse = await getClient().project.list({})
+      const projectsResponse = await getClient().project.list()
       const projects = projectsResponse.data || []
       const otherProjects = projects
         .filter((p) => path.resolve(p.worktree) !== projectDirectory)

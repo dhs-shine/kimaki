@@ -106,7 +106,7 @@ export async function handleRestartOpencodeServerCommand({
       }
       if (client) {
         await errore.tryAsync(() => {
-          return client().session.abort({ path: { id: sessionId } })
+          return client().session.abort({ sessionID: sessionId })
         })
       }
     }

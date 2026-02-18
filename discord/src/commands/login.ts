@@ -120,7 +120,7 @@ export async function handleLoginCommand({
     }
 
     const providersResponse = await getClient().provider.list({
-      query: { directory: projectDirectory },
+      directory: projectDirectory,
     })
 
     if (!providersResponse.data) {
@@ -223,7 +223,7 @@ export async function handleLoginProviderSelectMenu(
 
     // Get provider info for display
     const providersResponse = await getClient().provider.list({
-      query: { directory: context.dir },
+      directory: context.dir,
     })
 
     const provider = providersResponse.data?.all.find((p) => p.id === selectedProviderId)
@@ -231,7 +231,7 @@ export async function handleLoginProviderSelectMenu(
 
     // Get auth methods for all providers
     const authMethodsResponse = await getClient().provider.auth({
-      query: { directory: context.dir },
+      directory: context.dir,
     })
 
     if (!authMethodsResponse.data) {
@@ -357,7 +357,7 @@ export async function handleLoginMethodSelectMenu(
 
     // Get auth methods again to get the selected one
     const authMethodsResponse = await getClient().provider.auth({
-      query: { directory: context.dir },
+      directory: context.dir,
     })
 
     const methods: ProviderAuthMethod[] = authMethodsResponse.data?.[context.providerId] || [
@@ -468,9 +468,9 @@ async function startOAuthFlow(
 
     // Start OAuth authorization
     const authorizeResponse = await getClient().provider.oauth.authorize({
-      path: { id: context.providerId },
-      body: { method: context.methodIndex },
-      query: { directory: context.dir },
+      providerID: context.providerId,
+      method: context.methodIndex,
+      directory: context.dir,
     })
 
     if (!authorizeResponse.data) {
@@ -510,9 +510,9 @@ async function startOAuthFlow(
     if (method === 'auto') {
       // Poll for completion (device flow)
       const callbackResponse = await getClient().provider.oauth.callback({
-        path: { id: context.providerId },
-        body: { method: context.methodIndex },
-        query: { directory: context.dir },
+        providerID: context.providerId,
+        method: context.methodIndex,
+        directory: context.dir,
       })
 
       if (callbackResponse.error) {
@@ -525,7 +525,7 @@ async function startOAuthFlow(
       }
 
       // Dispose to refresh provider state so new credentials are recognized
-      await getClient().instance.dispose({ query: { directory: context.dir } })
+      await getClient().instance.dispose({ directory: context.dir })
 
       await interaction.editReply({
         content: `✅ **Successfully authenticated with ${context.providerName}!**\n\nYou can now use models from this provider.`,
@@ -589,16 +589,15 @@ export async function handleApiKeyModalSubmit(interaction: ModalSubmitInteractio
 
     // Set the API key
     await getClient().auth.set({
-      path: { id: context.providerId },
-      body: {
+      providerID: context.providerId,
+      auth: {
         type: 'api',
         key: apiKey.trim(),
       },
-      query: { directory: context.dir },
     })
 
     // Dispose to refresh provider state so new credentials are recognized
-    await getClient().instance.dispose({ query: { directory: context.dir } })
+    await getClient().instance.dispose({ directory: context.dir })
 
     await interaction.editReply({
       content: `✅ **Successfully authenticated with ${context.providerName}!**\n\nYou can now use models from this provider.`,

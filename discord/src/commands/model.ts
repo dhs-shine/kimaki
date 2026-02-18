@@ -275,7 +275,7 @@ export async function handleModelCommand({
     // Parallelize: fetch providers, current model info, and variant cascade at the same time.
     // getCurrentModelInfo does DB lookups first (fast) and only hits provider.list as fallback.
     const [providersResponse, currentModelInfo, cascadeVariant] = await Promise.all([
-      getClient().provider.list({ query: { directory: projectDirectory } }),
+      getClient().provider.list({ directory: projectDirectory }),
       getCurrentModelInfo({
         sessionId,
         channelId: targetChannelId,
@@ -425,7 +425,7 @@ export async function handleProviderSelectMenu(
     }
 
     const providersResponse = await getClient().provider.list({
-      query: { directory: context.dir },
+      directory: context.dir,
     })
 
     if (!providersResponse.data) {
@@ -553,7 +553,7 @@ export async function handleModelSelectMenu(
     const getClient = await initializeOpencodeForDirectory(context.dir)
     if (!(getClient instanceof Error)) {
       const providersResponse = await getClient().provider.list({
-        query: { directory: context.dir },
+        directory: context.dir,
       })
       if (providersResponse.data) {
         const variants = getThinkingValuesForModel({

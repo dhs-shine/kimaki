@@ -3,7 +3,7 @@
 import { ChannelType, MessageFlags, type TextChannel, type ThreadChannel } from 'discord.js'
 import type { CommandContext } from './types.js'
 import { getThreadSession } from '../database.js'
-import { initializeOpencodeForDirectory, getOpencodeClientV2 } from '../opencode.js'
+import { initializeOpencodeForDirectory, getOpencodeClient } from '../opencode.js'
 import { resolveWorkingDirectory, SILENT_MESSAGE_FLAGS } from '../discord-utils.js'
 import { createLogger, LogPrefix } from '../logger.js'
 
@@ -68,8 +68,8 @@ export async function handleCompactCommand({ command }: CommandContext): Promise
     return
   }
 
-  const clientV2 = getOpencodeClientV2(projectDirectory)
-  if (!clientV2) {
+  const client = getOpencodeClient(projectDirectory)
+  if (!client) {
     await command.reply({
       content: 'Failed to get OpenCode client',
       flags: MessageFlags.Ephemeral | SILENT_MESSAGE_FLAGS,
@@ -82,7 +82,7 @@ export async function handleCompactCommand({ command }: CommandContext): Promise
 
   try {
     // Get session messages to find the model from the last user message
-    const messagesResult = await clientV2.session.messages({
+    const messagesResult = await client.session.messages({
       sessionID: sessionId,
       directory: workingDirectory,
     })
@@ -109,7 +109,7 @@ export async function handleCompactCommand({ command }: CommandContext): Promise
 
     const { providerID, modelID } = lastUserMessage.info.model
 
-    const result = await clientV2.session.summarize({
+    const result = await client.session.summarize({
       sessionID: sessionId,
       directory: workingDirectory,
       providerID,

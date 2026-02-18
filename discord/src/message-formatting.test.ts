@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { formatTodoList } from './message-formatting.js'
-import type { Part } from '@opencode-ai/sdk'
+import type { Part } from '@opencode-ai/sdk/v2'
 
 describe('formatTodoList', () => {
   test('formats active todo with monospace numbers', () => {

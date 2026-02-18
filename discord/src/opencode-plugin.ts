@@ -21,7 +21,7 @@ function tool<Args extends z.ZodRawShape>(input: {
 }) {
   return input
 }
-import { createOpencodeClient } from '@opencode-ai/sdk'
+import { createOpencodeClient } from '@opencode-ai/sdk/v2'
 import { REST, Routes } from 'discord.js'
 import * as errore from 'errore'
 import { getPrisma } from './database.js'
@@ -153,7 +153,7 @@ const kimakiPlugin: Plugin = async () => {
             const updateResult = await errore.tryAsync({
               try: async () => {
                 const sessionResponse = await client.session.get({
-                  path: { id: context.sessionID },
+                  sessionID: context.sessionID,
                 })
                 if (sessionResponse.data) {
                   const currentTitle = sessionResponse.data.title || ''
@@ -163,8 +163,8 @@ const kimakiPlugin: Plugin = async () => {
                     ? currentTitle
                     : `${emojiPrefix} ${currentTitle}`.trim()
                   await client.session.update({
-                    path: { id: context.sessionID },
-                    body: { title: newTitle },
+                    sessionID: context.sessionID,
+                    title: newTitle,
                   })
                 }
               },

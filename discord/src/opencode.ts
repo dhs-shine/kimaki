@@ -15,7 +15,7 @@ import {
   createOpencodeClient,
   type OpencodeClient,
   type Config as SdkConfig,
-} from '@opencode-ai/sdk'
+} from '@opencode-ai/sdk/v2'
 import { getBotToken } from './database.js'
 import { getDataDir, getLockPort } from './config.js'
 
@@ -30,14 +30,7 @@ type Config = Omit<SdkConfig, 'permission'> & {
     webfetch?: PermissionRule
     [key: string]: PermissionRule | undefined
   }
-  skills?: {
-    paths?: string[]
-  }
 }
-import {
-  createOpencodeClient as createOpencodeClientV2,
-  type OpencodeClient as OpencodeClientV2,
-} from '@opencode-ai/sdk/v2'
 import * as errore from 'errore'
 import { createLogger, LogPrefix } from './logger.js'
 import {
@@ -55,7 +48,6 @@ const opencodeServers = new Map<
   {
     process: ChildProcess
     client: OpencodeClient
-    clientV2: OpencodeClientV2
     port: number
   }
 >()
@@ -259,18 +251,12 @@ export async function initializeOpencodeForDirectory(
 
   const client = createOpencodeClient({
     baseUrl,
-    fetch: fetchWithTimeout,
-  })
-
-  const clientV2 = createOpencodeClientV2({
-    baseUrl,
     fetch: fetchWithTimeout as typeof fetch,
   })
 
   opencodeServers.set(directory, {
     process: serverProcess,
     client,
-    clientV2,
     port,
   })
 
@@ -292,9 +278,9 @@ export function getOpencodeServerPort(directory: string): number | null {
   return entry?.port ?? null
 }
 
-export function getOpencodeClientV2(directory: string): OpencodeClientV2 | null {
+export function getOpencodeClient(directory: string): OpencodeClient | null {
   const entry = opencodeServers.get(directory)
-  return entry?.clientV2 ?? null
+  return entry?.client ?? null
 }
 
 /**

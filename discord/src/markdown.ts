@@ -3,7 +3,7 @@
 // user messages, assistant responses, tool calls, and reasoning blocks.
 // Uses errore for type-safe error handling.
 
-import type { OpencodeClient } from '@opencode-ai/sdk'
+import type { OpencodeClient } from '@opencode-ai/sdk/v2'
 import * as errore from 'errore'
 import { createTaggedError } from 'errore'
 import * as yaml from 'js-yaml'
@@ -37,7 +37,7 @@ export class ShareMarkdown {
 
     // Get session info
     const sessionResponse = await this.client.session.get({
-      path: { id: sessionID },
+      sessionID,
     })
     if (!sessionResponse.data) {
       return new SessionNotFoundError({ sessionId: sessionID })
@@ -46,7 +46,7 @@ export class ShareMarkdown {
 
     // Get all messages
     const messagesResponse = await this.client.session.messages({
-      path: { id: sessionID },
+      sessionID,
     })
     if (!messagesResponse.data) {
       return new MessagesNotFoundError({ sessionId: sessionID })
@@ -258,7 +258,7 @@ export function getCompactSessionContext({
   return errore.tryAsync({
     try: async () => {
       const messagesResponse = await client.session.messages({
-        path: { id: sessionId },
+        sessionID: sessionId,
       })
       const messages = messagesResponse.data || []
 

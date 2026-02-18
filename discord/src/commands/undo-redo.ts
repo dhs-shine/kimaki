@@ -69,7 +69,7 @@ export async function handleUndoCommand({ command }: CommandContext): Promise<vo
   try {
     // Fetch messages to find the last assistant message
     const messagesResponse = await getClient().session.messages({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
 
     if (!messagesResponse.data || messagesResponse.data.length === 0) {
@@ -88,8 +88,8 @@ export async function handleUndoCommand({ command }: CommandContext): Promise<vo
     }
 
     const response = await getClient().session.revert({
-      path: { id: sessionId },
-      body: { messageID: lastAssistantMessage.info.id },
+      sessionID: sessionId,
+      messageID: lastAssistantMessage.info.id,
     })
 
     if (response.error) {
@@ -171,7 +171,7 @@ export async function handleRedoCommand({ command }: CommandContext): Promise<vo
   try {
     // Check if session has reverted state
     const sessionResponse = await getClient().session.get({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
 
     if (!sessionResponse.data?.revert) {
@@ -180,7 +180,7 @@ export async function handleRedoCommand({ command }: CommandContext): Promise<vo
     }
 
     const response = await getClient().session.unrevert({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
 
     if (response.error) {

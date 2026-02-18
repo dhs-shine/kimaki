@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-import { createOpencodeClient } from '@opencode-ai/sdk'
+import { createOpencodeClient } from '@opencode-ai/sdk/v2'
 
 async function listProjectsAndData() {
   // Connect to OpenCode server

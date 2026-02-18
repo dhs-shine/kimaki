@@ -69,7 +69,7 @@ export async function handleShareCommand({ command }: CommandContext): Promise<v
 
   try {
     const response = await getClient().session.share({
-      path: { id: sessionId },
+      sessionID: sessionId,
     })
 
     if (!response.data?.share?.url) {

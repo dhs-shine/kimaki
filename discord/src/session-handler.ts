@@ -26,7 +26,7 @@ import { getCurrentModelInfo } from './commands/model.js'
 import {
   initializeOpencodeForDirectory,
   getOpencodeServers,
-  getOpencodeClientV2,
+  getOpencodeClient,
 } from './opencode.js'
 import { sendThreadMessage, NOTIFY_MESSAGE_FLAGS, SILENT_MESSAGE_FLAGS } from './discord-utils.js'
 import { formatPart } from './message-formatting.js'
@@ -410,7 +410,7 @@ export async function abortAndRetrySession({
     `[ABORT-API] reason=model-change sessionId=${sessionId} - sending API abort for model change retry`,
   )
   const abortResult = await errore.tryAsync(() => {
-    return getClient().session.abort({ path: { id: sessionId } })
+    return getClient().session.abort({ sessionID: sessionId })
   })
   if (abortResult instanceof Error) {
     sessionLogger.log(`[ABORT-API] API abort call failed (may already be done):`, abortResult)
@@ -423,7 +423,7 @@ export async function abortAndRetrySession({
 
   // Fetch last user message from API
   sessionLogger.log(`[ABORT+RETRY] Fetching last user message for session ${sessionId}`)
-  const messagesResponse = await getClient().session.messages({ path: { id: sessionId } })
+  const messagesResponse = await getClient().session.messages({ sessionID: sessionId })
   const messages = messagesResponse.data || []
   const lastUserMessage = [...messages].reverse().find((m) => m.info.role === 'user')
 
@@ -544,8 +544,8 @@ export async function handleOpencodeSession({
     sessionLogger.log(`Attempting to reuse existing session ${sessionId}`)
     const sessionResponse = await errore.tryAsync(() => {
       return getClient().session.get({
-        path: { id: sessionId },
-        query: { directory: sdkDirectory },
+        sessionID: sessionId,
+        directory: sdkDirectory,
       })
     })
     if (sessionResponse instanceof Error) {
@@ -560,8 +560,8 @@ export async function handleOpencodeSession({
     const sessionTitle = prompt.length > 80 ? prompt.slice(0, 77) + '...' : prompt.slice(0, 80)
     voiceLogger.log(`[SESSION] Creating new session with title: "${sessionTitle}"`)
     const sessionResponse = await getClient().session.create({
-      body: { title: sessionTitle },
-      query: { directory: sdkDirectory },
+      title: sessionTitle,
+      directory: sdkDirectory,
     })
     session = sessionResponse.data
     sessionLogger.log(`Created new session ${session?.id}`)
@@ -592,8 +592,8 @@ export async function handleOpencodeSession({
     )
     const abortResult = await errore.tryAsync(() => {
       return getClient().session.abort({
-        path: { id: session.id },
-        query: { directory: sdkDirectory },
+        sessionID: session.id,
+        directory: sdkDirectory,
       })
     })
     if (abortResult instanceof Error) {
@@ -604,7 +604,7 @@ export async function handleOpencodeSession({
   // Auto-reject ALL pending permissions for this thread
   const threadPermissions = pendingPermissions.get(thread.id)
   if (threadPermissions && threadPermissions.size > 0) {
-    const clientV2 = getOpencodeClientV2(directory)
+    const permClient = getOpencodeClient(directory)
     for (const [permId, pendingPerm] of threadPermissions) {
       sessionLogger.log(`[PERMISSION] Auto-rejecting permission ${permId} due to new message`)
       // Remove the permission buttons from the Discord message
@@ -618,13 +618,13 @@ export async function handleOpencodeSession({
           removeButtonsResult,
         )
       }
-      if (!clientV2) {
-        sessionLogger.log(`[PERMISSION] OpenCode v2 client unavailable for permission ${permId}`)
+      if (!permClient) {
+        sessionLogger.log(`[PERMISSION] OpenCode client unavailable for permission ${permId}`)
         cleanupPermissionContext(pendingPerm.contextHash)
         continue
       }
       const rejectResult = await errore.tryAsync(() => {
-        return clientV2.permission.reply({
+        return permClient.permission.reply({
           requestID: permId,
           directory: pendingPerm.permissionDirectory,
           reply: 'reject',
@@ -728,7 +728,7 @@ export async function handleOpencodeSession({
       return undefined
     }
     const providersResponse = await errore.tryAsync(() => {
-      return getClient().provider.list({ query: { directory: sdkDirectory } })
+      return getClient().provider.list({ directory: sdkDirectory })
     })
     if (providersResponse instanceof Error || !providersResponse.data) {
       return undefined
@@ -784,12 +784,11 @@ export async function handleOpencodeSession({
     ])
   }
 
-  // Use v2 client for event subscription (has proper types for question.asked events)
-  const clientV2 = getOpencodeClientV2(directory)
-  if (!clientV2) {
-    throw new Error(`OpenCode v2 client not found for directory: ${directory}`)
+  const eventClient = getOpencodeClient(directory)
+  if (!eventClient) {
+    throw new Error(`OpenCode client not found for directory: ${directory}`)
   }
-  const eventsResult = await clientV2.event.subscribe(
+  const eventsResult = await eventClient.event.subscribe(
     { directory: sdkDirectory },
     { signal: abortController.signal },
   )
@@ -989,7 +988,7 @@ export async function handleOpencodeSession({
 
       const providersResponse = await errore.tryAsync(() => {
         return getClient().provider.list({
-          query: { directory: sdkDirectory },
+          directory: sdkDirectory,
         })
       })
       if (providersResponse instanceof Error) {
@@ -1632,8 +1631,8 @@ export async function handleOpencodeSession({
           // after session.idle due to race conditions in event ordering
           if (tokensUsedInSession === 0) {
             const messagesResponse = await getClient().session.messages({
-              path: { id: session.id },
-              query: { directory: sdkDirectory },
+              sessionID: session.id,
+              directory: sdkDirectory,
             })
             const messages = messagesResponse.data || []
             const lastAssistant = [...messages].reverse().find((m) => m.info.role === 'assistant')
@@ -1654,7 +1653,7 @@ export async function handleOpencodeSession({
           }
 
           const providersResponse = await getClient().provider.list({
-            query: { directory: sdkDirectory },
+            directory: sdkDirectory,
           })
           const provider = providersResponse.data?.all?.find((p) => p.id === usedProviderID)
           const model = provider?.models?.[usedModel || '']
@@ -1809,21 +1808,21 @@ export async function handleOpencodeSession({
       const variantField = earlyThinkingValue ? { variant: earlyThinkingValue } : {}
 
       const response = command
-        ? await getClient().session.command({
-            path: { id: session.id },
-            query: { directory: sdkDirectory },
-            body: {
+        ? await getClient().session.command(
+            {
+              sessionID: session.id,
+              directory: sdkDirectory,
               command: command.name,
               arguments: command.arguments,
               agent: agentPreference,
               ...variantField,
             },
-            signal: abortController.signal,
-          })
-        : await getClient().session.prompt({
-            path: { id: session.id },
-            query: { directory: sdkDirectory },
-            body: {
+            { signal: abortController.signal },
+          )
+        : await getClient().session.prompt(
+            {
+              sessionID: session.id,
+              directory: sdkDirectory,
               parts,
               system: getOpencodeSystemMessage({
                 sessionId: session.id,
@@ -1838,8 +1837,8 @@ export async function handleOpencodeSession({
               agent: agentPreference,
               ...variantField,
             },
-            signal: abortController.signal,
-          })
+            { signal: abortController.signal },
+          )
 
       if (response.error) {
         const errorMessage = (() => {

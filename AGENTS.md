@@ -4,6 +4,14 @@ after every change always run tsc inside discord to validate your changes. try t
 
 do not use spawnSync. use our util execAsync. which uses spawn under the hood
 
+## opencode SDK
+
+always import from `@opencode-ai/sdk/v2`, never from `@opencode-ai/sdk` (v1). the v2 SDK uses flat parameters instead of nested `path`/`query`/`body` objects. for example:
+- `session.get({ sessionID: id })` not `session.get({ path: { id } })`
+- `session.messages({ sessionID: id, directory })` not `session.messages({ path: { id }, query: { directory } })`
+- `session.create({ title, directory })` not `session.create({ body: { title }, query: { directory } })`
+- `provider.list({ directory })` not `provider.list({ query: { directory } })`
+
 # restarting the discord bot
 
 ONLY restart the discord bot if the user explicitly asks for it.
@@ -618,26 +626,3 @@ const jsonSchema = toJSONSchema(mySchema, {
 });
 ```
 
-
-<!-- opensrc:start -->
-
-## Source Code Reference
-
-Source code for dependencies is available in `opensrc/` for deeper understanding of implementation details.
-
-See `opensrc/sources.json` for the list of available packages and their versions.
-
-Use this source code when you need to understand how a package works internally, not just its types/interface.
-
-### Fetching Additional Source Code
-
-To fetch source code for a package or repository you need to understand, run:
-
-```bash
-npx opensrc <package>           # npm package (e.g., npx opensrc zod)
-npx opensrc pypi:<package>      # Python package (e.g., npx opensrc pypi:requests)
-npx opensrc crates:<package>    # Rust crate (e.g., npx opensrc crates:serde)
-npx opensrc <owner>/<repo>      # GitHub repo (e.g., npx opensrc vercel/ai)
-```
-
-<!-- opensrc:end -->

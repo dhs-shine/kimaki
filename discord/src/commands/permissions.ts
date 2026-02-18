@@ -11,7 +11,7 @@ import {
 } from 'discord.js'
 import crypto from 'node:crypto'
 import type { PermissionRequest } from '@opencode-ai/sdk/v2'
-import { getOpencodeClientV2 } from '../opencode.js'
+import { getOpencodeClient } from '../opencode.js'
 import { NOTIFY_MESSAGE_FLAGS } from '../discord-utils.js'
 import { createLogger, LogPrefix } from '../logger.js'
 
@@ -164,14 +164,14 @@ export async function handlePermissionButton(interaction: ButtonInteraction): Pr
   await interaction.deferUpdate()
 
   try {
-    const clientV2 = getOpencodeClientV2(context.directory)
-    if (!clientV2) {
+    const permClient = getOpencodeClient(context.directory)
+    if (!permClient) {
       throw new Error('OpenCode server not found for directory')
     }
     const requestIds = context.requestIds.length > 0 ? context.requestIds : [context.permission.id]
     await Promise.all(
       requestIds.map((requestId) => {
-        return clientV2.permission.reply({
+        return permClient.permission.reply({
           requestID: requestId,
           directory: context.permissionDirectory,
           reply: response,

@@ -7,11 +7,10 @@ import { z } from 'zod'
 import { spawn, type ChildProcess } from 'node:child_process'
 import net from 'node:net'
 import {
-  createOpencodeClient,
   type OpencodeClient,
   type AssistantMessage,
   type Provider,
-} from '@opencode-ai/sdk'
+} from '@opencode-ai/sdk/v2'
 import { createLogger, LogPrefix } from './logger.js'
 import * as errore from 'errore'
 
@@ -43,14 +42,14 @@ export async function getTools({
 
   const markdownRenderer = new ShareMarkdown(client)
 
-  const providersResponse = await client.config.providers({})
+  const providersResponse = await client.config.providers()
   const providers: Provider[] = providersResponse.data?.providers || []
 
   // Helper: get last assistant model for a session (non-summary)
   const getSessionModel = async (
     sessionId: string,
   ): Promise<{ providerID: string; modelID: string } | undefined> => {
-    const res = await getClient().session.messages({ path: { id: sessionId } })
+    const res = await getClient().session.messages({ sessionID: sessionId })
     const data = res.data
     if (!data || data.length === 0) return undefined
     for (let i = data.length - 1; i >= 0; i--) {
@@ -79,12 +78,10 @@ export async function getTools({
         // do not await
         getClient()
           .session.prompt({
-            path: { id: sessionId },
-            body: {
-              parts: [{ type: 'text', text: message }],
-              model: sessionModel,
-              system: getOpencodeSystemMessage({ sessionId }),
-            },
+            sessionID: sessionId,
+            parts: [{ type: 'text', text: message }],
+            model: sessionModel,
+            system: getOpencodeSystemMessage({ sessionId }),
           })
           .then(async (response) => {
             const markdownResult = await markdownRenderer.generate({
@@ -134,9 +131,7 @@ export async function getTools({
 
         try {
           const session = await getClient().session.create({
-            body: {
-              title: title || message.slice(0, 50),
-            },
+            title: title || message.slice(0, 50),
           })
 
           if (!session.data) {
@@ -146,11 +141,9 @@ export async function getTools({
           // do not await
           getClient()
             .session.prompt({
-              path: { id: session.data.id },
-              body: {
-                parts: [{ type: 'text', text: message }],
-                system: getOpencodeSystemMessage({ sessionId: session.data.id }),
-              },
+              sessionID: session.data.id,
+              parts: [{ type: 'text', text: message }],
+              system: getOpencodeSystemMessage({ sessionId: session.data.id }),
             })
             .then(async (response) => {
               const markdownResult = await markdownRenderer.generate({
@@ -208,7 +201,7 @@ export async function getTools({
           const status = await (async () => {
             if (session.revert) return 'error'
             const messagesResponse = await getClient().session.messages({
-              path: { id: session.id },
+              sessionID: session.id,
             })
             const messages = messagesResponse.data || []
             const lastMessage = messages[messages.length - 1]
@@ -250,10 +243,8 @@ export async function getTools({
       }),
       execute: async ({ folder, query }) => {
         const results = await getClient().find.files({
-          query: {
-            query,
-            directory: folder,
-          },
+          query,
+          directory: folder,
         })
 
         return {
@@ -272,7 +263,7 @@ export async function getTools({
       execute: async ({ sessionId, lastAssistantOnly = false }) => {
         if (lastAssistantOnly) {
           const messages = await getClient().session.messages({
-            path: { id: sessionId },
+            sessionID: sessionId,
           })
 
           if (!messages.data) {
@@ -316,7 +307,7 @@ export async function getTools({
           }
 
           const messages = await getClient().session.messages({
-            path: { id: sessionId },
+            sessionID: sessionId,
           })
           const lastMessage = messages.data?.[messages.data.length - 1]
           const status =
@@ -347,7 +338,7 @@ export async function getTools({
             `[ABORT] reason=voice-tool sessionId=${sessionId} - user requested abort via voice assistant tool`,
           )
           const result = await getClient().session.abort({
-            path: { id: sessionId },
+            sessionID: sessionId,
           })
 
           if (!result.data) {
@@ -376,7 +367,7 @@ export async function getTools({
       inputSchema: z.object({}),
       execute: async () => {
         try {
-          const providersResponse = await getClient().config.providers({})
+          const providersResponse = await getClient().config.providers()
           const providers: Provider[] = providersResponse.data?.providers || []
 
           const models: Array<{ providerId: string; modelId: string }> = []

@@ -9,7 +9,7 @@
  * 3. Logs the available models sorted by release date
  */
 
-import { createOpencodeClient } from '@opencode-ai/sdk'
+import { createOpencodeClient } from '@opencode-ai/sdk/v2'
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 

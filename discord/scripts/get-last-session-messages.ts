@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-import { createOpencodeClient } from '@opencode-ai/sdk'
+import { createOpencodeClient } from '@opencode-ai/sdk/v2'
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 
@@ -140,7 +140,7 @@ async function getLastSessionMessages() {
 
     // Get messages for the session
     const messagesResponse = await client.session.messages({
-      path: { id: latestSession.id },
+      sessionID: latestSession.id,
     })
     
     if (!messagesResponse.data) {

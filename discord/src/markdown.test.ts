@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll } from 'vitest'
 import { spawn, type ChildProcess } from 'child_process'
-import { OpencodeClient } from '@opencode-ai/sdk'
+import { OpencodeClient } from '@opencode-ai/sdk/v2'
 import * as errore from 'errore'
 import { ShareMarkdown, getCompactSessionContext } from './markdown.js'
 
@@ -212,7 +212,7 @@ test('generate markdown from session with tools', async () => {
     // Check first 10 sessions
     try {
       const messages = await client.session.messages({
-        path: { id: session.id },
+        sessionID: session.id,
       })
       if (messages.data?.some((msg) => msg.parts?.some((part) => part.type === 'tool'))) {
         sessionWithTools = session

@@ -1,6 +1,6 @@
 ---
 name: jitter
-description: Control Jitter (jitter.video) for exporting animations, replacing assets, and modifying text programmatically via Playwright.
+description: Control Jitter (jitter.video) for exporting animations, replacing assets, and modifying text programmatically via Playwriter.
 ---
 
 # Jitter Programmatic Control Skill
@@ -93,7 +93,7 @@ await page.evaluate(() => {
 
 // Wait for sync then export
 await page.evaluate(() => jitterUtils.waitForSync());
-const exportUrl = await page.evaluate(() => 
+const exportUrl = await page.evaluate(() =>
   jitterUtils.generateExportUrlFromCurrentProject({ profile: 'lottie' })
 );
 await page.goto(exportUrl);
@@ -108,7 +108,7 @@ await page.evaluate(async () => {
     'node1': { url: 'https://temp-asset.svg' },
     'node2': { text: 'Temporary Text' }
   };
-  
+
   await jitterUtils.withTemporaryChanges(nodeIds, changes, async () => {
     // Changes applied here, will be restored after
     const url = jitterUtils.generateExportUrlFromCurrentProject();

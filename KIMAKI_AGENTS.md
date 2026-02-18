@@ -62,7 +62,7 @@ it is a package for using errors as values in ts.
 if I ask you questions about opencode you can opensrc it from anomalyco/opencode
 
 ## discord bot messages
- 
+
 try to not use emojis in messages
 
 when creating system messages like replies to commands never add new line spaces between paragraphs or lines. put one line next to the one before.
@@ -125,3 +125,8 @@ for the log prefixes always use short names
 
 kimaki will also output logs to the file discord/kimaki.log
 for checkout validation requests, prefer non-recursive checks unless the user asks otherwise.
+
+
+## skills folder
+
+skills is a symlink to discord/skills. this is a folder of skills for kimaki. loaded by all kimaki users. some skills are synced from github repos. see discord/scripts/sync-skills.ts. so never manually update them. instead if need to updaste them start kimaki threads on those project, found via kimaki cli.

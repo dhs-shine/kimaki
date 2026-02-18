@@ -82,6 +82,18 @@ export function setCritiqueEnabled(enabled: boolean): void {
   critiqueEnabled = enabled
 }
 
+// Whether to forward OpenCode server stdout/stderr to kimaki.log.
+// Disabled by default, enabled via --verbose-opencode-server CLI flag.
+let verboseOpencodeServer = false
+
+export function getVerboseOpencodeServer(): boolean {
+  return verboseOpencodeServer
+}
+
+export function setVerboseOpencodeServer(enabled: boolean): void {
+  verboseOpencodeServer = enabled
+}
+
 // Registered user commands, populated by registerCommands() in cli.ts.
 // Stored here (not cli.ts) to avoid circular imports since commands/ modules need this.
 export type RegisteredUserCommand = { name: string; description: string }

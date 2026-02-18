@@ -68,6 +68,7 @@ import {
   setDefaultVerbosity,
   setDefaultMentionMode,
   setCritiqueEnabled,
+  setVerboseOpencodeServer,
   getProjectsDir,
 } from './config.js'
 import { sanitizeAgentName } from './commands/agent.js'
@@ -1483,6 +1484,7 @@ cli
   .option('--mention-mode', 'Bot only responds when @mentioned (default for all channels)')
   .option('--no-critique', 'Disable automatic diff upload to critique.work in system prompts')
   .option('--auto-restart', 'Automatically restart the bot on crash or OOM kill')
+  .option('--verbose-opencode-server', 'Forward OpenCode server stdout/stderr to kimaki.log')
   .action(
     async (options: {
       restart?: boolean
@@ -1495,6 +1497,7 @@ cli
       mentionMode?: boolean
       noCritique?: boolean
       autoRestart?: boolean
+      verboseOpencodeServer?: boolean
     }) => {
       try {
         // Set data directory early, before any database access
@@ -1525,6 +1528,11 @@ cli
         if (options.noCritique) {
           setCritiqueEnabled(false)
           cliLogger.log('Critique disabled: diffs will not be auto-uploaded to critique.work')
+        }
+
+        if (options.verboseOpencodeServer) {
+          setVerboseOpencodeServer(true)
+          cliLogger.log('Verbose OpenCode server: stdout/stderr will be forwarded to kimaki.log')
         }
 
         if (options.installUrl) {

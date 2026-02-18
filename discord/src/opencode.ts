@@ -17,7 +17,7 @@ import {
   type Config as SdkConfig,
 } from '@opencode-ai/sdk/v2'
 import { getBotToken } from './database.js'
-import { getDataDir, getLockPort } from './config.js'
+import { getDataDir, getLockPort, getVerboseOpencodeServer } from './config.js'
 
 // SDK Config type is simplified; opencode accepts nested permission objects with path patterns
 type PermissionAction = 'ask' | 'allow' | 'deny'
@@ -190,18 +190,36 @@ export async function initializeOpencodeForDirectory(
     },
   })
 
-  // Buffer logs until we know if server started successfully
+  // Buffer logs until we know if server started successfully.
+  // Once ready, switch to forwarding if --verbose-opencode-server is set.
   const logBuffer: string[] = []
+  let serverReady = false
+  const shortDir = path.basename(directory)
+
   logBuffer.push(
     `Spawned opencode serve --port ${port} in ${directory} (pid: ${serverProcess.pid})`,
   )
 
   serverProcess.stdout?.on('data', (data) => {
-    logBuffer.push(`[stdout] ${data.toString().trim()}`)
+    const line = data.toString().trim()
+    if (!serverReady) {
+      logBuffer.push(`[stdout] ${line}`)
+      return
+    }
+    if (getVerboseOpencodeServer()) {
+      opencodeLogger.log(`[${shortDir}:${port}] ${line}`)
+    }
   })
 
   serverProcess.stderr?.on('data', (data) => {
-    logBuffer.push(`[stderr] ${data.toString().trim()}`)
+    const line = data.toString().trim()
+    if (!serverReady) {
+      logBuffer.push(`[stderr] ${line}`)
+      return
+    }
+    if (getVerboseOpencodeServer()) {
+      opencodeLogger.error(`[${shortDir}:${port}] ${line}`)
+    }
   })
 
   serverProcess.on('error', (error) => {
@@ -240,6 +258,7 @@ export async function initializeOpencodeForDirectory(
     }
     return waitResult
   }
+  serverReady = true
   opencodeLogger.log(`Server ready on port ${port}`)
 
   const baseUrl = `http://127.0.0.1:${port}`

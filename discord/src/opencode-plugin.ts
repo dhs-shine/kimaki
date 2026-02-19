@@ -40,6 +40,66 @@ function isEmoji(str: string): boolean {
   return EMOJI_REGEX.test(str)
 }
 
+type GitState = {
+  key: string
+  kind: 'branch' | 'detached-head' | 'detached-submodule'
+  label: string
+  warning: string | null
+}
+
+async function resolveGitState({ directory }: { directory: string }): Promise<GitState | null> {
+  const branchResult = await errore.tryAsync(() => {
+    return execAsync('git symbolic-ref --short HEAD', { cwd: directory })
+  })
+  if (!(branchResult instanceof Error)) {
+    const branch = branchResult.stdout.trim()
+    if (branch) {
+      return {
+        key: `branch:${branch}`,
+        kind: 'branch',
+        label: branch,
+        warning: null,
+      }
+    }
+  }
+
+  const shaResult = await errore.tryAsync(() => {
+    return execAsync('git rev-parse --short HEAD', { cwd: directory })
+  })
+  if (shaResult instanceof Error) {
+    return null
+  }
+
+  const shortSha = shaResult.stdout.trim()
+  if (!shortSha) {
+    return null
+  }
+
+  const superprojectResult = await errore.tryAsync(() => {
+    return execAsync('git rev-parse --show-superproject-working-tree', { cwd: directory })
+  })
+  const superproject = superprojectResult instanceof Error ? '' : superprojectResult.stdout.trim()
+  if (superproject) {
+    return {
+      key: `detached-submodule:${shortSha}`,
+      kind: 'detached-submodule',
+      label: `detached submodule @ ${shortSha}`,
+      warning:
+        `[Warning: Submodule is in detached HEAD at ${shortSha}. ` +
+        'Create or switch to a branch before committing.]',
+    }
+  }
+
+  return {
+    key: `detached-head:${shortSha}`,
+    kind: 'detached-head',
+    label: `detached HEAD @ ${shortSha}`,
+    warning:
+      `[Warning: Repository is in detached HEAD at ${shortSha}. ` +
+      'Create or switch to a branch before committing.]',
+  }
+}
+
 const kimakiPlugin: Plugin = async ({ directory }) => {
   const botToken = process.env.KIMAKI_BOT_TOKEN
   const dataDir = process.env.KIMAKI_DATA_DIR
@@ -60,7 +120,7 @@ const kimakiPlugin: Plugin = async ({ directory }) => {
     : null
 
   // Per-session state for synthetic part injection
-  const sessionBranches = new Map<string, string>()
+  const sessionGitStates = new Map<string, GitState>()
   const sessionLastMessageTime = new Map<string, number>()
 
   return {
@@ -295,31 +355,32 @@ const kimakiPlugin: Plugin = async ({ directory }) => {
       const { sessionID } = input
       const messageID = 'messageID' in first ? first.messageID : ''
 
-      // -- Branch detection --
-      // Runs `git branch --show-current` in the project directory.
-      // Only injects a part when the branch is first seen or changed mid-session.
-      try {
-        const { stdout } = await execAsync('git branch --show-current', { cwd: directory })
-        const branch = stdout.trim()
-        if (branch) {
-          const lastBranch = sessionBranches.get(sessionID)
-          if (lastBranch !== branch) {
-            const info = lastBranch
-              ? `[Branch changed: ${lastBranch} -> ${branch}]`
-              : `[Current branch: ${branch}]`
-            sessionBranches.set(sessionID, branch)
-            output.parts.push({
-              id: crypto.randomUUID(),
-              sessionID,
-              messageID,
-              type: 'text' as const,
-              text: info,
-              synthetic: true,
-            })
-          }
+      // -- Branch / detached HEAD detection --
+      // Injects context when git state first appears or changes mid-session.
+      const gitState = await resolveGitState({ directory })
+      if (gitState) {
+        const previousState = sessionGitStates.get(sessionID)
+        if (!previousState || previousState.key !== gitState.key) {
+          const info = (() => {
+            if (gitState.warning) {
+              return gitState.warning
+            }
+            if (previousState?.kind === 'branch') {
+              return `[Branch changed: ${previousState.label} -> ${gitState.label}]`
+            }
+            return `[Current branch: ${gitState.label}]`
+          })()
+
+          sessionGitStates.set(sessionID, gitState)
+          output.parts.push({
+            id: crypto.randomUUID(),
+            sessionID,
+            messageID,
+            type: 'text' as const,
+            text: info,
+            synthetic: true,
+          })
         }
-      } catch {
-        // Not in a git repo, git not available, or detached HEAD - skip silently
       }
 
       // -- Time since last message --
@@ -365,7 +426,7 @@ const kimakiPlugin: Plugin = async ({ directory }) => {
     event: async ({ event }) => {
       if (event.type === 'session.deleted') {
         const id = event.properties.info.id
-        sessionBranches.delete(id)
+        sessionGitStates.delete(id)
         sessionLastMessageTime.delete(id)
       }
     },

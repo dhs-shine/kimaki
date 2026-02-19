@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.66
+
+### Patch Changes
+
+- feat: **session search command** - add `kimaki session search <query>` CLI command to search past conversations with text or regex patterns
+- feat: **plugin branch detection** - inject synthetic parts showing current branch and branch changes mid-session
+- feat: **plugin idle-time awareness** - inject timestamp parts when >10min elapsed between messages
+- feat: **skill tool visibility** - show skill invocations (playwriter, tuistory, jitter) in essential tools verbosity mode
+- feat: **verbose OpenCode server flag** - add `--verbose-opencode-server` to forward server logs to kimaki.log for debugging
+- feat: **skills infrastructure** - sync-skills script clones and discovers skills from remote repos, add skills paths to OpenCode config
+- feat: **V8 heap snapshots** - inject `--heapsnapshot-near-heap-limit=3` to catch OOM crashes before SIGKILL
+- feat: **CLI upgrade restart** - `kimaki upgrade` now automatically restarts the running bot after upgrading
+- fix: **read-only explore permissions** - prevent explore subagents from inheriting global allow rules for edits and bash
+- fix: **typing indicator lifecycle** - clear delayed typing restarts on session cleanup to prevent zombie typing
+- fix: **detached git state warnings** - detect detached HEAD and detached submodule states in branch context
+- fix: **message content truncation** - truncate unbounded error messages and AI text to prevent Discord API errors (fixes #38)
+- fix: **archive delay** - increase from 3s to 5s so final messages are read before thread hides
+- refactor: **migrate to SDK v2** - complete migration from @opencode-ai/sdk v1 to v2 flat parameter convention
+- chore: **increase bash inline threshold** - raise from 50 to 100 chars for better command visibility
+- chore: **bump errore to 0.12.0** - includes cleanup/cancellation docs and SuppressedError handling
+- docs: add **traforo comprehensive guide**, essential tools filtering reference, plan-first guidance for cross-project prompts
+
 ## 0.4.65
 
 ### Patch Changes

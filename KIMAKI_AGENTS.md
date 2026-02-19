@@ -67,6 +67,14 @@ try to not use emojis in messages
 
 when creating system messages like replies to commands never add new line spaces between paragraphs or lines. put one line next to the one before.
 
+## discord typing indicator
+
+discord typing indicators expire quickly (about 7 seconds), so keep a periodic `sendTyping()` interval active during long-running responses and tool calls.
+
+do not remove the typing interval to fix stuck typing; instead fix lifecycle bugs by clearing both the active interval and any scheduled restart timeout when a session ends, aborts, or pauses for permission/question prompts.
+
+when adding delayed typing restarts (for example after `step-finish`), always guard them with session closed/aborted checks so they cannot restart typing after cleanup.
+
 ## AGENTS.md
 
 AGENTS.md is generated. only edit KIMAKI_AGENTS.md instead. pnpm agents.md will generate the file again.

@@ -804,7 +804,6 @@ export async function handleOpencodeSession({
   const sentPartIds = new Set<string>(existingPartIds)
 
   const partBuffer = new Map<string, Map<string, Part>>()
-  let stopTyping: (() => void) | null = null
   let usedModel: string | undefined = earlyModelParam.modelID
   let usedProviderID: string | undefined = earlyModelParam.providerID
   let usedAgent: string | undefined
@@ -817,19 +816,41 @@ export async function handleOpencodeSession({
   let handlerPromise: Promise<void> | null = null
 
   let typingInterval: NodeJS.Timeout | null = null
+  let typingRestartTimeout: NodeJS.Timeout | null = null
+  let handlerClosed = false
   let hasSentParts = false
   let promptResolved = false
   let hasReceivedEvent = false
 
-  function startTyping(): () => void {
-    if (abortController.signal.aborted) {
-      discordLogger.log(`Not starting typing, already aborted`)
-      return () => {}
+  function clearTypingInterval(): void {
+    if (!typingInterval) {
+      return
     }
-    if (typingInterval) {
-      clearInterval(typingInterval)
-      typingInterval = null
+    clearInterval(typingInterval)
+    typingInterval = null
+  }
+
+  function clearTypingRestartTimeout(): void {
+    if (!typingRestartTimeout) {
+      return
     }
+    clearTimeout(typingRestartTimeout)
+    typingRestartTimeout = null
+  }
+
+  function stopTyping(): void {
+    clearTypingInterval()
+    clearTypingRestartTimeout()
+  }
+
+  function startTyping(): void {
+    if (abortController.signal.aborted || handlerClosed) {
+      discordLogger.log(`Not starting typing, handler already closing`)
+      return
+    }
+
+    clearTypingRestartTimeout()
+    clearTypingInterval()
 
     void errore
       .tryAsync(() => thread.sendTyping())
@@ -840,6 +861,10 @@ export async function handleOpencodeSession({
       })
 
     typingInterval = setInterval(() => {
+      if (abortController.signal.aborted || handlerClosed) {
+        clearTypingInterval()
+        return
+      }
       void errore
         .tryAsync(() => thread.sendTyping())
         .then((result) => {
@@ -848,26 +873,38 @@ export async function handleOpencodeSession({
           }
         })
     }, 8000)
+  }
 
-    if (!abortController.signal.aborted) {
-      abortController.signal.addEventListener(
-        'abort',
-        () => {
-          if (typingInterval) {
-            clearInterval(typingInterval)
-            typingInterval = null
-          }
-        },
-        { once: true },
-      )
+  function scheduleTypingRestart(): void {
+    clearTypingRestartTimeout()
+    if (abortController.signal.aborted || handlerClosed) {
+      return
     }
 
-    return () => {
-      if (typingInterval) {
-        clearInterval(typingInterval)
-        typingInterval = null
+    typingRestartTimeout = setTimeout(() => {
+      typingRestartTimeout = null
+      if (abortController.signal.aborted || handlerClosed) {
+        return
       }
-    }
+      const hasPendingQuestion = [...pendingQuestionContexts.values()].some((ctx) => {
+        return ctx.thread.id === thread.id
+      })
+      const hasPendingPermission = (pendingPermissions.get(thread.id)?.size ?? 0) > 0
+      if (hasPendingQuestion || hasPendingPermission) {
+        return
+      }
+      startTyping()
+    }, 300)
+  }
+
+  if (!abortController.signal.aborted) {
+    abortController.signal.addEventListener(
+      'abort',
+      () => {
+        stopTyping()
+      },
+      { once: true },
+    )
   }
 
   // Read verbosity dynamically so mid-session /verbosity changes take effect immediately
@@ -1091,7 +1128,7 @@ export async function handleOpencodeSession({
         )
         const hasPendingPermission = (pendingPermissions.get(thread.id)?.size ?? 0) > 0
         if (!hasPendingQuestion && !hasPendingPermission) {
-          stopTyping = startTyping()
+          startTyping()
         }
         return
       }
@@ -1173,15 +1210,7 @@ export async function handleOpencodeSession({
           messageID: assistantMessageId || part.messageID,
           force: true,
         })
-        setTimeout(() => {
-          if (abortController.signal.aborted) return
-          const hasPendingQuestion = [...pendingQuestionContexts.values()].some(
-            (ctx) => ctx.thread.id === thread.id,
-          )
-          const hasPendingPermission = (pendingPermissions.get(thread.id)?.size ?? 0) > 0
-          if (hasPendingQuestion || hasPendingPermission) return
-          stopTyping = startTyping()
-        }, 300)
+        scheduleTypingRestart()
       }
     }
 
@@ -1321,10 +1350,7 @@ export async function handleOpencodeSession({
         sessionLogger.log(
           `[PERMISSION] Deduped permission ${permission.id} (matches pending ${existingPending.permission.id})`,
         )
-        if (stopTyping) {
-          stopTyping()
-          stopTyping = null
-        }
+        stopTyping()
         if (!pendingPermissions.has(thread.id)) {
           pendingPermissions.set(thread.id, new Map())
         }
@@ -1352,10 +1378,7 @@ export async function handleOpencodeSession({
         `Permission requested: permission=${permission.permission}, patterns=${permission.patterns.join(', ')}${subtaskLabel ? `, subtask=${subtaskLabel}` : ''}`,
       )
 
-      if (stopTyping) {
-        stopTyping()
-        stopTyping = null
-      }
+      stopTyping()
 
       const { messageId, contextHash } = await showPermissionButtons({
         thread,
@@ -1423,10 +1446,7 @@ export async function handleOpencodeSession({
         `Question requested: id=${questionRequest.id}, questions=${questionRequest.questions.length}`,
       )
 
-      if (stopTyping) {
-        stopTyping()
-        stopTyping = null
-      }
+      stopTyping()
 
       await flushBufferedParts({
         messageID: assistantMessageId || '',
@@ -1593,6 +1613,7 @@ export async function handleOpencodeSession({
       sessionLogger.error(`Unexpected error in event handling code`, e)
       throw e
     } finally {
+      handlerClosed = true
       abortControllers.delete(session.id)
       const finalMessageId = assistantMessageId
       if (finalMessageId) {
@@ -1604,10 +1625,7 @@ export async function handleOpencodeSession({
         }
       }
 
-      if (stopTyping) {
-        stopTyping()
-        stopTyping = null
-      }
+      stopTyping()
 
       const abortReason = (abortController.signal.reason as Error)?.message
       if (!abortController.signal.aborted || abortReason === 'finished') {
@@ -1734,7 +1752,7 @@ export async function handleOpencodeSession({
         return
       }
 
-      stopTyping = startTyping()
+      startTyping()
 
       voiceLogger.log(
         `[PROMPT] Sending prompt to session ${session.id}: "${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}"`,

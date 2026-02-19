@@ -64,10 +64,18 @@ it is a package for using errors as values in ts.
 if I ask you questions about opencode you can opensrc it from anomalyco/opencode
 
 ## discord bot messages
- 
+
 try to not use emojis in messages
 
 when creating system messages like replies to commands never add new line spaces between paragraphs or lines. put one line next to the one before.
+
+## discord typing indicator
+
+discord typing indicators expire quickly (about 7 seconds), so keep a periodic `sendTyping()` interval active during long-running responses and tool calls.
+
+do not remove the typing interval to fix stuck typing; instead fix lifecycle bugs by clearing both the active interval and any scheduled restart timeout when a session ends, aborts, or pauses for permission/question prompts.
+
+when adding delayed typing restarts (for example after `step-finish`), always guard them with session closed/aborted checks so they cannot restart typing after cleanup.
 
 ## AGENTS.md
 
@@ -127,6 +135,11 @@ for the log prefixes always use short names
 
 kimaki will also output logs to the file discord/kimaki.log
 for checkout validation requests, prefer non-recursive checks unless the user asks otherwise.
+
+
+## skills folder
+
+skills is a symlink to discord/skills. this is a folder of skills for kimaki. loaded by all kimaki users. some skills are synced from github repos. see discord/scripts/sync-skills.ts. so never manually update them. instead if need to updaste them start kimaki threads on those project, found via kimaki cli.
 
 # core guidelines
 

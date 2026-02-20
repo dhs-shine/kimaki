@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.67
+
+### Patch Changes
+
+- feat: **`/session-id` command** - new slash command shows current session ID and `opencode attach` command to connect directly from terminal
+- fix: **harden opencode plugin hooks** - wrap `chat.message` and `event` hooks in `errore.tryAsync` to prevent unhandled rejections from crashing the plugin; log warnings instead
+- fix: **file upload timeout** - replace `AbortSignal.timeout()` with explicit `AbortController` + `errore.tryAsync` for cleaner error handling in `kimaki_file_upload` tool
+- fix: **suppress embed previews** in `/model` confirmation replies to avoid noisy link unfurls
+- fix: **label voice transcriptions** - prepend `Voice message transcription from Discord user:` prefix so the model understands the message origin
+- fix: **`/context-usage` format** - show percentage first (`95%, 12,345 / 13,000 tokens`) for quicker scanning
+- docs: **`kimaki tunnel` help** - clarify that custom `--tunnel-id` is only safe for services meant to be public
+- chore: **update tuistory skill** guidance from upstream
+- chore: **bump traforo submodule** after Retry-After fix
+
 ## 0.4.66
 
 ### Patch Changes

@@ -68,6 +68,8 @@ sudo apt-get install tmux
 
 Use a tmux session with a descriptive name like \`projectname-dev\` so you can reuse it later:
 
+Use random tunnel IDs by default. Only pass \`-t\` when exposing a service that is safe to be publicly discoverable.
+
 \`\`\`bash
 # Create a tmux session (use project name + dev, e.g. "myapp-dev", "website-dev")
 tmux new-session -d -s myapp-dev
@@ -94,7 +96,7 @@ tmux send-keys -t nextjs-dev "npx kimaki tunnel -p 3000 -- pnpm dev" Enter
 tmux new-session -d -s vite-dev-5173
 tmux send-keys -t vite-dev "npx kimaki tunnel -p 5173 -- pnpm dev" Enter
 
-# Custom tunnel ID for consistent URL
+# Custom tunnel ID (only for intentionally public-safe services)
 tmux new-session -d -s holocron-dev
 tmux send-keys -t holocron-dev "npx kimaki tunnel -p 3000 -t holocron -- pnpm dev" Enter
 \`\`\`

@@ -445,7 +445,7 @@ export async function startDiscordBot({
           lastSessionContext,
         })
         if (transcription) {
-          messageContent = transcription
+          messageContent = `Voice message transcription from Discord user:\n\n${transcription}`
         }
 
         const fileAttachments = await getFileAttachments(message)
@@ -609,7 +609,7 @@ export async function startDiscordBot({
           appId: currentAppId,
         })
         if (transcription) {
-          messageContent = transcription
+          messageContent = `Voice message transcription from Discord user:\n\n${transcription}`
         }
 
         const fileAttachments = await getFileAttachments(message)

@@ -1544,6 +1544,24 @@ export async function handleOpencodeSession({
       await thread.send({ content: chunk, flags: SILENT_MESSAGE_FLAGS })
     }
 
+    const handleTuiToast = async (properties: {
+      title?: string
+      message: string
+      variant: 'info' | 'success' | 'warning' | 'error'
+      duration?: number
+    }) => {
+      if (properties.variant === 'warning') {
+        return
+      }
+      const message = properties.message.trim()
+      if (!message) {
+        return
+      }
+      const titlePrefix = properties.title ? `${properties.title.trim()}: ` : ''
+      const chunk = `⬦ ${properties.variant}: ${titlePrefix}${message}`
+      await thread.send({ content: chunk, flags: SILENT_MESSAGE_FLAGS })
+    }
+
     const handleSessionIdle = (idleSessionId: string) => {
       if (idleSessionId === session.id) {
         if (!promptResolved || !hasReceivedEvent) {
@@ -1600,6 +1618,9 @@ export async function handleOpencodeSession({
             break
           case 'session.status':
             await handleSessionStatus(event.properties)
+            break
+          case 'tui.toast.show':
+            await handleTuiToast(event.properties)
             break
           default:
             break

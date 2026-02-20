@@ -28,9 +28,9 @@ console.log(user.name)                  // TypeScript knows: User
 1. Always `import * as errore from 'errore'` — namespace import, never destructure
 2. Never throw for expected failures — return errors as values
 3. Never return `unknown | Error` — the union collapses to `unknown`, breaks narrowing
-4. Never use `try-catch` for control flow — use `errore.tryAsync` / `errore.try` to convert exceptions to values
+4. Avoid `try-catch` for control flow — use `errore.tryAsync` / `errore.try` to convert exceptions to values
 5. Use `createTaggedError` for domain errors — gives you `_tag`, typed properties, `$variable` interpolation, `cause`, `findCause`, `toJSON`, and fingerprinting
-6. Always annotate return types with the error union — `Promise<MyError | OtherError | Value>`
+6. Let TypeScript infer return types — only add explicit annotations when they improve readability (complex unions, public APIs) or when inference produces a wider type than intended
 7. Use `cause` to wrap errors — `new MyError({ ..., cause: originalError })`
 8. Use `| null` for optional values, not `| undefined` — three-way narrowing: `instanceof Error`, `=== null`, then value
 9. Use `const` + expressions, never `let` + try-catch — ternaries, IIFEs, `instanceof Error`
@@ -45,7 +45,6 @@ console.log(user.name)                  // TypeScript knows: User
 These TypeScript practices complement errore's philosophy:
 
 - **Object args over positional** — `({id, retries})` not `(id, retries)` for functions with 2+ params
-- **Block body on arrow functions** — `(x) => { return x }` not `(x) => x`, easier to add statements later
 - **Expressions over statements** — use IIFEs, ternaries, `.map`/`.filter` instead of `let` + mutation
 - **Early returns** — check and return at top, don't nest. Combine conditions: `if (a && b)` not `if (a) { if (b) }`
 - **No `any`** — search for proper types, use `as unknown as T` only as last resort
@@ -53,6 +52,34 @@ These TypeScript practices complement errore's philosophy:
 - **No uninitialized `let`** — use IIFE with returns instead of `let x; if (...) { x = ... }`
 - **Type empty arrays** — `const items: string[] = []` not `const items = []`
 - **Module imports for node builtins** — `import fs from 'node:fs'` then `fs.readFileSync(...)`, not named imports
+
+- **Let TypeScript infer return types** — don't annotate return types by default. TypeScript infers them from the code and the inferred type is always correct. Only add an explicit return type when it genuinely improves readability (complex unions, public API boundaries) or when inference produces a wider type than intended:
+  ```ts
+  // BAD: redundant annotation — TypeScript already infers this exact type
+  function getUser(id: string): Promise<NotFoundError | User> {
+    const user = await db.find(id)
+    if (!user) return new NotFoundError({ id })
+    return user
+  }
+
+  // GOOD: let inference do its job
+  function getUser(id: string) {
+    const user = await db.find(id)
+    if (!user) return new NotFoundError({ id })
+    return user
+  }
+
+  // GOOD: explicit annotation when it adds clarity on a complex public API
+  function processRequest(req: Request): Promise<
+    | ValidationError
+    | AuthError
+    | DbError
+    | null
+    | Response
+  > {
+    // ...
+  }
+  ```
 
 - **`.filter(isTruthy)` not `.filter(Boolean)`** — `Boolean` doesn't narrow types, so `(T | null)[]` stays `(T | null)[]` after filtering. Use a type guard instead:
   ```ts
@@ -87,6 +114,162 @@ These TypeScript practices complement errore's philosophy:
     console.warn('Failed to send email:', emailResult.message)
   }
   ```
+
+## Flat Control Flow
+
+Keep block nesting as low as possible. Every level of indentation is cognitive load. The ideal function reads top to bottom at root nesting level — a sequence of checks and early returns, no `else`, no nested `if`, no `try-catch`.
+
+### Avoid `else`
+
+`else` is almost never necessary. Most `if-else` blocks can be rewritten as an `if` with an early return followed by the rest of the code at root level:
+
+```ts
+// BAD: else creates unnecessary nesting
+function getLabel(user: User): string {
+  if (user.isAdmin) {
+    return 'Admin'
+  } else {
+    return 'Member'
+  }
+}
+
+// GOOD: early return, no else
+function getLabel(user: User): string {
+  if (user.isAdmin) return 'Admin'
+  return 'Member'
+}
+```
+
+This applies to `else if` chains too — replace them with a sequence of early-return `if` blocks:
+
+```ts
+// BAD: else-if chain
+function getStatus(code: number): string {
+  if (code === 200) {
+    return 'ok'
+  } else if (code === 404) {
+    return 'not found'
+  } else if (code >= 500) {
+    return 'server error'
+  } else {
+    return 'unknown'
+  }
+}
+
+// GOOD: flat sequence of ifs
+function getStatus(code: number): string {
+  if (code === 200) return 'ok'
+  if (code === 404) return 'not found'
+  if (code >= 500) return 'server error'
+  return 'unknown'
+}
+```
+
+### Flatten nested `if` into root-level checks
+
+Any nested `if` can be converted to a series of root-level `if` statements by inverting conditions and returning early. This follows directly from boolean logic — `if (A) { if (B) { ... } }` is equivalent to `if (!A) return; if (!B) return; ...`:
+
+```ts
+// BAD: nested ifs — 3 levels deep
+function processOrder(order: Order): ProcessError | Receipt {
+  if (order.items.length > 0) {
+    if (order.payment) {
+      if (order.payment.verified) {
+        return createReceipt(order)
+      } else {
+        return new ProcessError({ reason: 'Payment not verified' })
+      }
+    } else {
+      return new ProcessError({ reason: 'No payment method' })
+    }
+  } else {
+    return new ProcessError({ reason: 'Empty cart' })
+  }
+}
+
+// GOOD: flat — every check at root level
+function processOrder(order: Order): ProcessError | Receipt {
+  if (order.items.length === 0) {
+    return new ProcessError({ reason: 'Empty cart' })
+  }
+  if (!order.payment) {
+    return new ProcessError({ reason: 'No payment method' })
+  }
+  if (!order.payment.verified) {
+    return new ProcessError({ reason: 'Payment not verified' })
+  }
+  return createReceipt(order)
+}
+```
+
+The transformation rule: take the outermost `if` condition, negate it, return the failure case, then continue at root level. Repeat for each nested `if`. The happy path falls through to the end.
+
+### Avoid `try-catch` for control flow
+
+`try-catch` is the worst offender for nesting. It forces a two-branch structure (`try` + `catch`) and hides which line threw. With errore, convert exceptions to values at boundaries and use `instanceof` checks:
+
+```ts
+// BAD: try-catch nesting
+async function loadConfig(): Promise<Config> {
+  try {
+    const raw = await fs.readFile('config.json', 'utf-8')
+    try {
+      const parsed = JSON.parse(raw)
+      if (!parsed.port) {
+        throw new Error('Missing port')
+      }
+      return parsed
+    } catch (e) {
+      throw new Error(`Invalid JSON: ${e}`)
+    }
+  } catch (e) {
+    return { port: 3000 }
+  }
+}
+
+// GOOD: flat with errore
+async function loadConfig(): Promise<Config> {
+  const raw = await errore.tryAsync({
+    try: () => fs.readFile('config.json', 'utf-8'),
+    catch: (e) => new ConfigError({ reason: 'Read failed', cause: e }),
+  })
+  if (raw instanceof Error) return { port: 3000 }
+
+  const parsed = errore.try({
+    try: () => JSON.parse(raw) as Config,
+    catch: (e) => new ConfigError({ reason: 'Invalid JSON', cause: e }),
+  })
+  if (parsed instanceof Error) return { port: 3000 }
+
+  if (!parsed.port) return { port: 3000 }
+
+  return parsed
+}
+```
+
+### Keep the happy path at minimum indentation
+
+Structure functions so the success path runs at the root nesting level (zero indentation inside the function body). Error cases are handled at the top of each step and exit early. The reader scans down the left edge to follow the main logic:
+
+```ts
+async function handleRequest(req: Request): Promise<AppError | Response> {
+  const body = await parseBody(req)
+  if (body instanceof Error) return body
+
+  const user = await authenticate(req.headers)
+  if (user instanceof Error) return user
+
+  const permission = checkPermission(user, body.resource)
+  if (permission instanceof Error) return permission
+
+  const result = await execute(body.action, body.resource)
+  if (result instanceof Error) return result
+
+  return new Response(JSON.stringify(result), { status: 200 })
+}
+```
+
+> Every line of actual logic is at nesting level 1 (the function body). Error checks are short, self-contained, and exit immediately. No `else`, no `try-catch`, no nesting.
 
 ## Patterns
 
@@ -444,6 +627,71 @@ return res.status(response.status).json(response.body)
 
 > `matchError` routes by `_tag` and requires an `Error` fallback for plain Error instances. Use `matchErrorPartial` when you only need to handle some cases.
 
+### Resource Cleanup (defer)
+
+errore ships `DisposableStack` and `AsyncDisposableStack` polyfills that work in every runtime. Use them with TypeScript's `using` / `await using` for Go-like `defer` cleanup.
+
+**tsconfig requirement:** add `"ESNext.Disposable"` to `lib` so TypeScript knows about `Disposable`, `AsyncDisposable`, `using`, and `await using`:
+
+```jsonc
+{
+  "compilerOptions": {
+    "lib": ["ES2022", "ESNext.Disposable"]
+  }
+}
+```
+
+Without this, `using`/`await using` declarations and `Symbol.dispose`/`Symbol.asyncDispose` will produce type errors. The errore polyfill handles the runtime side — this setting handles the type side.
+
+<!-- bad -->
+```ts
+async function processRequest(id: string) {
+  const db = await connectDb()
+  try {
+    const cache = await openCache()
+    try {
+      // ... use db and cache ...
+      return result
+    } finally {
+      await cache.flush()
+    }
+  } finally {
+    await db.close()
+  }
+}
+```
+
+<!-- good -->
+```ts
+import * as errore from 'errore'
+
+async function processRequest(id: string): Promise<DbError | Result> {
+  await using cleanup = new errore.AsyncDisposableStack()
+
+  const db = await errore.tryAsync({
+    try: () => connectDb(),
+    catch: (e) => new DbError({ cause: e }),
+  })
+  if (db instanceof Error) return db
+  cleanup.defer(() => db.close())
+
+  const cache = await errore.tryAsync({
+    try: () => openCache(),
+    catch: (e) => new CacheError({ cause: e }),
+  })
+  if (cache instanceof Error) return cache
+  cleanup.defer(() => cache.flush())
+
+  // ... use db and cache ...
+  return result
+  // cleanup runs automatically in LIFO order:
+  // 1. cache.flush()
+  // 2. db.close()
+}
+```
+
+> `await using` guarantees cleanup runs when the scope exits — whether by return, early error return, or thrown exception. Resources are released in reverse order (LIFO), just like Go's `defer`. No `try/finally` nesting.
+
 ### Fallback Values
 
 <!-- bad -->
@@ -635,7 +883,7 @@ for (const id of ids) {
 const allResults = await Promise.all(ids.map((id) => fetchItem(id)))
 const [items, errors] = errore.partition(allResults)
 
-errors.forEach((e) => { console.warn('Failed:', e.message) })
+errors.forEach((e) => console.warn('Failed:', e.message))
 // items contains only successful results, fully typed
 ```
 
@@ -792,6 +1040,15 @@ errore.matchError(err, {
 
 ```ts
 import * as errore from 'errore'
+
+// --- Resource cleanup (Go-like defer) ---
+await using cleanup = new errore.AsyncDisposableStack()
+cleanup.defer(() => db.close())     // runs on scope exit, LIFO order
+cleanup.defer(() => cache.flush())  // this runs first (last in, first out)
+
+// sync version
+using cleanup = new errore.DisposableStack()
+cleanup.defer(() => file.closeSync())
 
 // --- Define errors ---
 class MyError extends errore.createTaggedError({

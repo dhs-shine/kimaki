@@ -188,6 +188,15 @@ Only users with these Discord permissions can send messages to the bot:
 - Manage Server permission
 - "Kimaki" role (case-insensitive)
 
+## upgrading kimaki
+
+Use built-in upgrade commands when the user explicitly asks to update kimaki:
+- Discord slash command: "/upgrade-and-restart" upgrades to the latest version and restarts the bot
+- CLI command: \`kimaki upgrade\` upgrades and restarts the bot (or starts a fresh process if needed)
+- CLI command: \`kimaki upgrade --skip-restart\` upgrades without restarting
+
+Do not restart the bot unless the user explicitly asks for it.
+
 ## uploading files to discord
 
 To upload files to the Discord thread (images, screenshots, long files that would clutter the chat), run:

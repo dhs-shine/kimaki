@@ -186,6 +186,7 @@ Just send a message in any channel linked to a project. Kimaki handles the rest.
 | `/clear-queue` | Clear all queued messages in this thread |
 | `/undo` | Undo the last assistant message (revert file changes) |
 | `/redo` | Redo the last undone message |
+| `/upgrade-and-restart` | Upgrade kimaki to latest and restart the bot |
 
 ### CLI Commands
 
@@ -222,6 +223,12 @@ Create Discord channels for a project directory without starting a session. Usef
 ```bash
 # Add current directory as a project
 npx -y kimaki project add
+
+# Upgrade kimaki and restart the running bot process
+npx -y kimaki upgrade
+
+# Upgrade only (skip bot restart)
+npx -y kimaki upgrade --skip-restart
 
 # Add a specific directory
 npx -y kimaki project add /path/to/project
